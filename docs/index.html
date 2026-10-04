@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Tankpreise">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Tankpreise Uhingen</title>
+<style>
+:root{
+  --bg:#f2f2f7;--card:#fff;--fg:#1c1c1e;--muted:#6e6e73;--line:#e5e5ea;
+  --acc:#0a7cff;--good:#1a9f4a;--good-bg:#e3f6e9;--bad:#d93025;--bad-bg:#fde8e6;--seg:#e3e3e8;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#000;--card:#1c1c1e;--fg:#f2f2f7;--muted:#98989f;--line:#2c2c2e;
+  --acc:#3d9bff;--good:#3ddc84;--good-bg:#0f2e1b;--bad:#ff6b5e;--bad-bg:#3a1512;--seg:#2c2c2e;
+}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--fg)}
+body{font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+  padding:calc(env(safe-area-inset-top) + 12px) 16px calc(env(safe-area-inset-bottom) + 24px);
+  max-width:640px;margin:0 auto}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:12px}
+h1{font-size:30px;margin:0;letter-spacing:-.02em}
+.sub{color:var(--muted);font-size:14px}
+#stand{white-space:pre-line}
+h2{font-size:20px;margin:28px 4px 8px}
+button{font:inherit;border:0;cursor:pointer}
+.iconbtn{background:var(--card);color:var(--acc);width:40px;height:40px;border-radius:20px;display:grid;place-items:center;flex:none}
+.iconbtn svg{width:22px;height:22px}
+.seg{display:flex;background:var(--seg);border-radius:10px;padding:2px;margin:8px 0 16px}
+.seg button{flex:1;padding:7px 0;border-radius:8px;background:none;color:var(--fg);font-size:15px;font-weight:500}
+.seg button.on{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:12px}
+.hero .label{color:var(--muted);font-size:14px}
+.hero .price{font-size:52px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.1;margin:4px 0}
+.hero .price sup{font-size:26px}
+.hero .where{font-weight:600}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:13px;font-weight:600}
+.pill.good{background:var(--good-bg);color:var(--good)} .pill.bad{background:var(--bad-bg);color:var(--bad)}
+.pill.neutral{background:var(--seg);color:var(--muted)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 16px;border-radius:12px;background:var(--acc);color:#fff;font-weight:600;text-decoration:none}
+.btn.secondary{background:var(--seg);color:var(--acc)}
+.btn.block{width:100%}
+.tip{display:flex;gap:12px;align-items:flex-start}
+.tip .emoji{font-size:24px;line-height:1}
+.list{background:var(--card);border-radius:14px;overflow:hidden}
+.item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);color:inherit;text-decoration:none}
+.item:last-child{border-bottom:0}
+.item .info{flex:1;min-width:0}
+.item .name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .addr{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .p{text-align:right;font-variant-numeric:tabular-nums}
+.item .p b{font-size:20px} .item .p b sup{font-size:12px}
+.item .d{font-size:12px;color:var(--muted)}
+.item.closed{opacity:.45}
+.item.best .p b{color:var(--good)}
+.chev{color:var(--muted);flex:none}
+svg.chart{width:100%;height:auto;display:block}
+svg.chart text{fill:var(--muted);font-size:11px;font-family:inherit}
+.gl{stroke:var(--line)} .ln{fill:none;stroke:var(--acc);stroke-width:2;stroke-linejoin:round}
+.bar-up{fill:var(--bad);opacity:.55} .bar-down{fill:var(--good);opacity:.55} .bar-best{fill:var(--good)} .bar-now{stroke:var(--fg);stroke-width:1.5}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.stats .card{margin:0} .stats b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.empty{text-align:center;color:var(--muted);padding:32px 16px}
+.toast{position:fixed;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom) + 16px);max-width:608px;margin:0 auto;background:var(--fg);color:var(--bg);padding:12px 16px;border-radius:12px;font-size:15px;transform:translateY(150%);opacity:0;visibility:hidden;transition:transform .25s,opacity .25s,visibility .25s;z-index:20}
+.toast.show{transform:none;opacity:1;visibility:visible}
+dialog{border:0;border-radius:16px;padding:0;width:min(560px,calc(100% - 32px));background:var(--bg);color:var(--fg)}
+dialog::backdrop{background:rgba(0,0,0,.4)}
+dialog .inner{padding:20px}
+dialog h3{margin:0 0 12px;font-size:20px}
+label{display:block;font-size:14px;color:var(--muted);margin:14px 0 4px}
+input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg)}
+.small{font-size:13px;color:var(--muted)}
+.small a{color:var(--acc)}
+.actions{display:flex;gap:8px;margin-top:18px}
+.actions .btn{flex:1}
+.spin{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Tankpreise</h1>
+    <div class="sub" id="stand">Uhingen &amp; Umgebung</div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button class="iconbtn" id="btnFetch" aria-label="Jetzt neu abrufen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    </button>
+    <button class="iconbtn" id="btnSettings" aria-label="Einstellungen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="seg" id="seg">
+  <button data-f="e5">Super E5</button>
+  <button data-f="e10">Super E10</button>
+  <button data-f="diesel">Diesel</button>
+</div>
+
+<main id="main"><div class="empty">Lade Daten …</div></main>
+
+<dialog id="dlg">
+  <form method="dialog" class="inner">
+    <h3>Einstellungen</h3>
+    <p class="small">Damit der Knopf <b>„Jetzt abrufen“</b> funktioniert, braucht die App einmalig einen GitHub-Zugangsschlüssel.
+      Er wird nur auf diesem iPhone gespeichert.
+      <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Schlüssel erstellen</a>
+      (Repository auswählen → Berechtigung <i>Actions: Read and write</i>).</p>
+    <label for="inRepo">Repository (Besitzer/Name)</label>
+    <input id="inRepo" placeholder="benutzer/tankpreise" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label for="inToken">GitHub-Zugangsschlüssel</label>
+    <input id="inToken" type="password" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <div class="actions">
+      <button class="btn secondary" value="cancel">Abbrechen</button>
+      <button class="btn" value="save" id="btnSave">Speichern</button>
+    </div>
+    <div class="actions">
+      <button class="btn secondary block" value="report" id="btnReport" type="button">Wochenreport jetzt erstellen</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const FUELS = { e5: "Super E5", e10: "Super E10", diesel: "Diesel" };
+  const WD = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+  const store = {
+    get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  };
+  let fuel = store.get("fuel", "e5");
+  let latest = null, summary = null, reports = [];
+
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  // 1.759 -> "1,75<sup>9</sup>"
+  const price = (v) => {
+    if (v == null) return "–";
+    const s = v.toFixed(3).replace(".", ",");
+    return `${s.slice(0, -1)}<sup>${s.slice(-1)}</sup>`;
+  };
+  const eur = (v) => v == null ? "–" : v.toFixed(3).replace(".", ",") + " €";
+  const ct = (v) => (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(v * 100).toFixed(1).replace(".", ",") + " ct";
+  const ago = (iso) => {
+    const m = Math.round((Date.now() - new Date(iso)) / 60000);
+    if (m < 1) return "gerade eben";
+    if (m < 60) return `vor ${m} Min.`;
+    const h = Math.round(m / 60);
+    return h < 24 ? `vor ${h} Std.` : new Date(iso).toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  };
+  const toast = (msg, ms = 3500) => {
+    const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toast._t); if (ms) toast._t = setTimeout(() => t.classList.remove("show"), ms);
+  };
+  const mapsUrl = (s) => s.lat && s.lng
+    ? `https://maps.apple.com/?daddr=${s.lat},${s.lng}&q=${encodeURIComponent(s.brand || s.name || "Tankstelle")}`
+    : `https://maps.apple.com/?q=${encodeURIComponent(`${s.street} ${s.place}`)}`;
+
+  async function getJSON(path) {
+    const r = await fetch(`${path}?t=${Date.now()}`, { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  }
+  async function load() {
+    const [l, s, r] = await Promise.allSettled([getJSON("data/latest.json"), getJSON("data/summary.json"), getJSON("data/reports.json")]);
+    latest = l.value || null; summary = s.value || null; reports = r.value || [];
+    render();
+  }
+
+  function render() {
+    document.querySelectorAll("#seg button").forEach((b) => b.classList.toggle("on", b.dataset.f === fuel));
+    $("#stand").textContent = latest?.updated ? `Uhingen & Umgebung\nStand ${ago(latest.updated)}` : "Uhingen & Umgebung";
+    const main = $("#main");
+    if (!latest?.stations?.length) {
+      main.innerHTML = `<div class="card empty">Noch keine Daten vorhanden.<br>Der erste Abruf läuft zur nächsten vollen Stunde – oder tippe oben auf ↻.</div>` + reportsHtml();
+      return;
+    }
+    const sum = summary?.fuels?.[fuel];
+    const withPrice = latest.stations.filter((s) => s.open && s[fuel] != null).sort((a, b) => a[fuel] - b[fuel] || a.dist - b.dist);
+    const others = latest.stations.filter((s) => !(s.open && s[fuel] != null)).sort((a, b) => a.dist - b.dist);
+    const best = withPrice[0];
+    const avgNow = withPrice.length ? withPrice.reduce((a, s) => a + s[fuel], 0) / withPrice.length : null;
+    let h = "";
+
+    if (best) {
+      const diff = best[fuel] - avgNow;
+      h += `<div class="card hero">
+        <div class="label">Am günstigsten gerade · ${FUELS[fuel]}</div>
+        <div class="price">${price(best[fuel])} €</div>
+        <div class="where">${esc(best.brand)} · ${esc(best.place)}</div>
+        <div class="sub">${esc(best.street)} · ${best.dist?.toFixed(1).replace(".", ",")} km</div>
+        <div class="row">
+          ${withPrice.length > 1 ? `<span class="pill good">${ct(diff)} unter Ø der Umgebung</span>` : ""}
+          ${sum?.trend != null ? `<span class="pill ${sum.trend > 0 ? "bad" : "good"}">Woche ${ct(sum.trend)}</span>` : ""}
+        </div>
+        <div class="row"><a class="btn" href="${mapsUrl(best)}">Route starten</a></div>
+      </div>`;
+    }
+
+    if (sum && sum.hour_avg) {
+      const hNow = new Date().getHours();
+      const devNow = sum.hour_avg[String(hNow)];
+      const bh = sum.best_hour;
+      let verdict = "";
+      if (devNow != null) {
+        verdict = devNow <= sum.hour_avg[String(bh)] + 0.01
+          ? "Jetzt ist eine gute Zeit zum Tanken."
+          : devNow > 0.01
+            ? `Jetzt (${hNow} Uhr) ist es typischerweise ${ct(devNow)} teurer als im Tagesmittel – wenn möglich warten.`
+            : `Jetzt (${hNow} Uhr) liegt der Preis meist etwa im Tagesmittel.`;
+      }
+      h += `<div class="card tip"><div class="emoji">💡</div><div>
+        <b>Beste Tankzeit: ${bh}–${bh + 1} Uhr</b> (${ct(sum.hour_avg[String(bh)])} ggü. Tagesmittel)<br>
+        <span class="sub">${verdict} Am teuersten: ${sum.worst_hour}–${sum.worst_hour + 1} Uhr.
+        ${sum.best_wd != null ? `Günstigster Wochentag: ${WD[sum.best_wd]}.` : ""}</span></div></div>`;
+    }
+
+    h += `<h2>Alle Tankstellen</h2><div class="list">`;
+    for (const s of [...withPrice, ...others]) {
+      const has = s.open && s[fuel] != null;
+      const d = has && best ? s[fuel] - best[fuel] : null;
+      h += `<a class="item ${has ? "" : "closed"} ${s === best ? "best" : ""}" href="${mapsUrl(s)}">
+        <div class="info"><div class="name">${esc(s.brand || s.name)}</div>
+          <div class="addr">${esc(s.street)}, ${esc(s.place)} · ${s.dist?.toFixed(1).replace(".", ",")} km</div></div>
+        <div class="p">${has ? `<b>${price(s[fuel])}</b><div class="d">${d ? ct(d) : "günstigste"}</div>` : `<div class="d">${s.open ? "kein Preis" : "geschlossen"}</div>`}</div>
+        <svg class="chev" width="8" height="14" viewBox="0 0 8 14"><path d="M1 1l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+      </a>`;
+    }
+    h += `</div>`;
+
+    if (sum) {
+      h += `<h2>Letzte 7 Tage</h2>
+        <div class="stats">
+          <div class="card"><span class="sub">Ø Preis</span><b>${eur(sum.mean)}</b></div>
+          <div class="card"><span class="sub">Tiefstpreis</span><b style="color:var(--good)">${eur(sum.min)}</b>
+            <span class="sub">${esc(sum.min_station.split(",")[0])}</span></div>
+        </div>
+        <div class="card"><div class="sub" style="margin-bottom:6px">Durchschnittspreis im Verlauf</div>${lineChart(sum.series)}</div>
+        <div class="card"><div class="sub" style="margin-bottom:6px">Abweichung nach Uhrzeit (grün = günstiger)</div>${hourChart(sum.hour_avg, sum.best_hour)}</div>`;
+      if (sum.ranking?.length) {
+        h += `<div class="list">` + sum.ranking.map((r, i) => `<div class="item"><div class="info">
+          <div class="name">${i + 1}. ${esc(r.label.split(",")[0])}</div><div class="addr">${esc(r.label.split(",").slice(1).join(",").trim())}</div></div>
+          <div class="p"><b>${price(r.mean)}</b><div class="d">Ø Woche</div></div></div>`).join("") + `</div>`;
+      }
+    }
+    h += reportsHtml();
+    h += `<p class="sub" style="text-align:center;margin-top:24px">Daten: Tankerkönig / MTS-K (CC BY 4.0)</p>`;
+    main.innerHTML = h;
+  }
+
+  function reportsHtml() {
+    if (!reports.length) return "";
+    return `<h2>Wochenreports</h2><div class="list">` + reports.map((r) =>
+      `<a class="item" href="${esc(r.file)}"><div class="info"><div class="name">${esc(r.title)}</div></div>
+       <svg class="chev" width="8" height="14" viewBox="0 0 8 14"><path d="M1 1l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg></a>`).join("") + `</div>`;
+  }
+
+  function lineChart(series) {
+    if (!series || series.length < 2) return `<div class="sub">Noch zu wenige Daten.</div>`;
+    const W = 340, H = 150, L = 38, R = 6, T = 8, B = 20;
+    const pts = series.map(([t, v]) => [new Date(t).getTime(), v]);
+    const t0 = pts[0][0], t1 = pts[pts.length - 1][0];
+    let lo = Math.min(...pts.map((p) => p[1])), hi = Math.max(...pts.map((p) => p[1]));
+    if (hi - lo < 0.01) { lo -= 0.005; hi += 0.005; }
+    const X = (t) => L + (t - t0) / (t1 - t0 || 1) * (W - L - R);
+    const Y = (v) => T + (hi - v) / (hi - lo) * (H - T - B);
+    let g = "";
+    for (let i = 0; i <= 2; i++) {
+      const v = lo + (hi - lo) * i / 2, y = Y(v);
+      g += `<line class="gl" x1="${L}" x2="${W - R}" y1="${y}" y2="${y}"/><text x="${L - 4}" y="${y + 4}" text-anchor="end">${v.toFixed(2).replace(".", ",")}</text>`;
+    }
+    const d0 = new Date(t0); d0.setHours(24, 0, 0, 0);
+    for (let d = d0; d.getTime() < t1; d = new Date(d.getTime() + 864e5)) {
+      const x = X(d.getTime());
+      g += `<line class="gl" x1="${x}" x2="${x}" y1="${T}" y2="${H - B}"/><text x="${x + 3}" y="${H - 6}">${WD[(d.getDay() + 6) % 7]}</text>`;
+    }
+    const path = pts.map((p) => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(" ");
+    return `<svg class="chart" viewBox="0 0 ${W} ${H}">${g}<polyline class="ln" points="${path}"/></svg>`;
+  }
+
+  function hourChart(hourAvg, bestHour) {
+    const W = 340, H = 130, L = 6, R = 6, T = 8, B = 18;
+    const vals = Array.from({ length: 24 }, (_, i) => hourAvg[String(i)] ?? null);
+    const m = Math.max(0.001, ...vals.filter((v) => v != null).map(Math.abs));
+    const zero = T + (H - T - B) / 2, sc = (H - T - B) / 2 / m, bw = (W - L - R) / 24, now = new Date().getHours();
+    let g = `<line class="gl" x1="${L}" x2="${W - R}" y1="${zero}" y2="${zero}"/>`;
+    vals.forEach((v, i) => {
+      const x = L + i * bw + bw * 0.15;
+      if (v != null) {
+        const h = Math.max(Math.abs(v) * sc, 1), y = v > 0 ? zero - h : zero;
+        const cls = i === bestHour ? "bar-best" : v > 0 ? "bar-up" : "bar-down";
+        g += `<rect class="${cls} ${i === now ? "bar-now" : ""}" x="${x}" y="${y}" width="${bw * 0.7}" height="${h}" rx="1.5"/>`;
+      }
+      if (i % 3 === 0) g += `<text x="${x + bw * 0.35}" y="${H - 4}" text-anchor="middle">${i}</text>`;
+    });
+    return `<svg class="chart" viewBox="0 0 ${W} ${H}">${g}</svg>`;
+  }
+
+  // ---- GitHub-Workflow starten (Knopf "Jetzt abrufen")
+  function defaultRepo() {
+    const m = location.hostname.match(/^([^.]+)\.github\.io$/);
+    const seg = location.pathname.split("/").filter(Boolean)[0];
+    return m && seg ? `${m[1]}/${seg}` : "";
+  }
+  async function dispatch(aktion) {
+    const repo = store.get("repo", defaultRepo()), token = store.get("token", "");
+    if (!repo || !token) { openSettings(); return; }
+    const btn = $("#btnFetch svg"); btn.classList.add("spin");
+    try {
+      const r = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/tankpreise.yml/dispatches`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+        body: JSON.stringify({ ref: "main", inputs: { aktion } }),
+      });
+      if (r.status !== 204) throw new Error(r.status === 401 || r.status === 403 ? "Schlüssel ungültig oder ohne Berechtigung" : `GitHub-Fehler ${r.status}`);
+      toast(aktion === "report" ? "Wochenreport wird erstellt – dauert ca. 1–2 Minuten." : "Abruf gestartet – neue Preise in ca. 1–2 Minuten.", 0);
+      await waitForUpdate(aktion === "report" ? "summary.json" : "latest.json");
+    } catch (e) {
+      toast("Fehler: " + e.message, 6000);
+    } finally { btn.classList.remove("spin"); }
+  }
+  async function waitForUpdate(file) {
+    const before = (file === "latest.json" ? latest : summary)?.updated;
+    for (let i = 0; i < 24; i++) {
+      await new Promise((r) => setTimeout(r, 15000));
+      try {
+        const d = await getJSON("data/" + file);
+        if (d.updated !== before) { await load(); toast("Aktualisiert ✓"); return; }
+      } catch {}
+    }
+    toast("Dauert länger als erwartet – später neu laden.", 5000);
+  }
+
+  function openSettings() {
+    $("#inRepo").value = store.get("repo", defaultRepo());
+    $("#inToken").value = store.get("token", "");
+    $("#dlg").showModal();
+  }
+  $("#dlg").addEventListener("close", () => {
+    if ($("#dlg").returnValue === "save") {
+      store.set("repo", $("#inRepo").value.trim());
+      store.set("token", $("#inToken").value.trim());
+      toast("Gespeichert.");
+    }
+  });
+  $("#btnReport").addEventListener("click", () => {
+    store.set("repo", $("#inRepo").value.trim());
+    store.set("token", $("#inToken").value.trim());
+    $("#dlg").close();
+    dispatch("report");
+  });
+  $("#btnSettings").addEventListener("click", openSettings);
+  $("#btnFetch").addEventListener("click", () => dispatch("abrufen"));
+  $("#seg").addEventListener("click", (e) => {
+    const f = e.target.dataset?.f; if (!f) return;
+    fuel = f; store.set("fuel", f); render();
+  });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+  load();
+})();
+</script>
+</body>
+</html>

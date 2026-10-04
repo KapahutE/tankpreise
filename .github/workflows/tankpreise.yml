@@ -1,0 +1,66 @@
+name: Tankpreise
+
+on:
+  schedule:
+    - cron: "7 * * * *"     # stündlich Preise abrufen
+    - cron: "37 4 * * 1"    # montags früh (06:37 Sommer- / 05:37 Winterzeit): Wochenreport
+  workflow_dispatch:         # manueller Start, z. B. über den Knopf in der iPhone-App
+    inputs:
+      aktion:
+        description: "Was soll passieren?"
+        type: choice
+        options: [abrufen, report]
+        default: abrufen
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: tankpreise
+  cancel-in-progress: false
+
+env:
+  TZ: Europe/Berlin
+
+jobs:
+  tankpreise:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Abrufen bzw. Wochenreport erstellen
+        env:
+          TANKERKOENIG_API_KEY: ${{ secrets.TANKERKOENIG_API_KEY }}
+        run: |
+          if [ "${{ github.event.schedule }}" = "37 4 * * 1" ] || [ "${{ inputs.aktion }}" = "report" ]; then
+            python tankpreise.py report
+          else
+            python tankpreise.py fetch
+            python tankpreise.py export
+          fi
+
+      - name: Daten im Repository speichern
+        run: |
+          git config user.name "tankpreise-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data docs
+          git diff --cached --quiet && exit 0
+          git commit -q -m "Tankpreise $(date '+%Y-%m-%d %H:%M')"
+          for i in 1 2 3 4; do git pull -q --rebase && git push -q && exit 0; sleep $((2**i)); done
+          exit 1
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: deploy
+        uses: actions/deploy-pages@v4

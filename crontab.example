@@ -1,0 +1,5 @@
+# crontab -e  (Pfad anpassen)
+# Stündlich Preise abrufen (Minute 2, damit nicht exakt zur vollen Stunde)
+2 * * * *  cd /home/USER/tankpreise && /usr/bin/python3 tankpreise.py fetch && /usr/bin/python3 tankpreise.py export >> fetch.log 2>&1
+# Montags 06:10 Uhr Wochenreport für die Vorwoche
+10 6 * * 1 cd /home/USER/tankpreise && /usr/bin/python3 tankpreise.py report >> report.log 2>&1

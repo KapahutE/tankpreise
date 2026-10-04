@@ -1,0 +1,15 @@
+# Alternative zu cron: Dauerbetrieb als systemd-Dienst
+# sudo cp tankpreise.service /etc/systemd/system/ && sudo systemctl enable --now tankpreise
+[Unit]
+Description=Tankpreis-Monitor Uhingen
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/home/USER/tankpreise
+ExecStart=/usr/bin/python3 /home/USER/tankpreise/tankpreise.py run
+Restart=always
+User=USER
+
+[Install]
+WantedBy=multi-user.target
