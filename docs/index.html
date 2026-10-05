@@ -908,7 +908,11 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
         headers: { Authorization: `Bearer ${token()}`, Accept: "application/vnd.github+json" },
         body: JSON.stringify({ ref: "main", inputs: { aktion } }),
       });
-      if (r.status !== 204) throw new Error(r.status === 401 || r.status === 403 ? "Schlüssel ungültig oder ohne Berechtigung" : `GitHub-Fehler ${r.status}`);
+      if (r.status !== 204) throw new Error({
+        401: "Schlüssel ungültig oder abgelaufen – unter ⚙ neu eintragen",
+        403: "Dem Schlüssel fehlt die Berechtigung „Actions: Read and write“",
+        404: "Repository nicht gefunden – ist es beim Schlüssel unter „Repository access“ ausgewählt?",
+      }[r.status] || `GitHub-Fehler ${r.status}`);
       toast(aktion === "report" ? "Wochenreport wird erstellt – dauert ca. 1–2 Minuten." : "Abruf gestartet – neue Preise in ca. 1–2 Minuten.", 0);
       const before = JSON.stringify(bases.map((b) => b.updated)), beforeRep = view?.reports?.length;
       for (let i = 0; i < 24; i++) {
