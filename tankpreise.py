@@ -29,6 +29,7 @@ import logging
 import math
 import os
 import random
+import re
 import statistics
 import sys
 import time
@@ -135,11 +136,38 @@ class Store:
         return out
 
 
+BRAND_FIX = {"ARAL": "Aral", "ESSO": "Esso", "AVIA": "Avia", "AVIA XPRESS": "Avia XPress",
+             "AGIP ENI": "Eni", "TS AM E-CENTER": "Tankstelle am E-Center"}
+PLACE_FIX = {"goeppingen": "Göppingen", "ebersbach a. d. f.": "Ebersbach a. d. Fils"}
+
+
+def _tidy(text):
+    """GROSSSCHRIFT -> Normalschrift, 'Strasse' -> 'Straße'."""
+    text = (text or "").strip()
+    if sum(c.isupper() for c in text) > max(3, sum(c.islower() for c in text)):
+        text = text.title()
+    return re.sub(r"(?i)strasse\b", lambda m: "Straße" if m.group()[0] == "S" else "straße", text)
+
+
+def nice_station(info):
+    """Einheitliche Schreibweise für Marke, Straße und Ort (Rohdaten bleiben unverändert)."""
+    info = info or {}
+    brand = (info.get("brand") or info.get("name") or "Tankstelle").strip()
+    if brand.lower().startswith("freie tankstelle"):
+        brand = "Freie Tankstelle"
+    brand = BRAND_FIX.get(brand.upper(), brand)
+    house = re.sub(r"\s*\([^)]*$", "", (info.get("house_number") or "").strip())
+    street = " ".join(x for x in (_tidy(info.get("street")), house) if x)
+    place = _tidy(info.get("place"))
+    place = PLACE_FIX.get(place.lower(), place)
+    return {"brand": brand, "street": street, "place": place}
+
+
 def station_label(st):
     if not st:
         return "Unbekannte Tankstelle"
-    return (f"{st.get('brand') or st.get('name') or ''} {st.get('street') or ''} "
-            f"{st.get('house_number') or ''}, {st.get('place') or ''}").strip()
+    n = nice_station(st)
+    return f"{n['brand']} {n['street']}, {n['place']}".strip()
 
 
 def _price(v):
@@ -237,7 +265,7 @@ def analyse(rows):
             ps = [r[f] for r in rs]
             changes = sum(1 for a, b in zip(ps, ps[1:]) if abs(a - b) > 1e-9)
             stations.append({
-                "label": rs[0]["label"], "dist": rs[0]["dist"],
+                "sid": sid, "label": rs[0]["label"], "dist": rs[0]["dist"],
                 "mean": statistics.mean(ps), "min": min(ps), "max": max(ps),
                 "n": len(ps), "changes": changes,
             })
@@ -477,10 +505,7 @@ def cmd_export(cfg):
                 continue
             info = st.get(r["sid"], {})
             latest["stations"].append({
-                "id": r["sid"], "brand": info.get("brand") or info.get("name"),
-                "name": info.get("name"), "street": " ".join(
-                    x for x in (info.get("street"), info.get("house_number")) if x),
-                "place": info.get("place"), "dist": info.get("dist_km"),
+                "id": r["sid"], **nice_station(info), "dist": info.get("dist_km"),
                 "lat": info.get("lat"), "lng": info.get("lng"),
                 "open": r["is_open"], **{f: r[f] for f in FUELS},
             })
@@ -498,10 +523,22 @@ def cmd_export(cfg):
             "best_hour": r["best_hour"], "worst_hour": r["worst_hour"],
             "hour_avg": {str(h): v for h, v in r["hour_avg"].items()},
             "best_wd": r["best_wd"],
-            "ranking": [{"label": s["label"], "mean": s["mean"], "dist": s["dist"]}
+            "ranking": [{"id": s["sid"], "label": s["label"], "mean": s["mean"], "dist": s["dist"]}
                         for s in r["stations"][:5]],
             "series": [[t.isoformat(), round(v, 4)] for t, v in r["series"]],
         }
+
+    # Verlauf je Tankstelle (7 Tage) für die Detailansicht der App
+    rows7 = store.rows(now - timedelta(days=7))
+    times = sorted({r["ts"] for r in rows7})
+    idx = {t: i for i, t in enumerate(times)}
+    per_station = {}
+    for r in rows7:
+        d = per_station.setdefault(r["sid"], {f: [None] * len(times) for f in FUELS})
+        for f in FUELS:
+            if r["is_open"] and r[f] is not None:
+                d[f][idx[r["ts"]]] = r[f]
+    history = {"ts": [t.isoformat(timespec="minutes") for t in times], "stations": per_station}
 
     # Liste der Wochenreports
     reports = []
@@ -511,7 +548,7 @@ def cmd_export(cfg):
                         "title": name[7:-5].replace("-KW", " · KW ")})
 
     for fname, obj in (("latest.json", latest), ("summary.json", summary),
-                       ("reports.json", reports)):
+                       ("history.json", history), ("reports.json", reports)):
         with open(os.path.join(out_dir, fname), "w", encoding="utf-8") as fh:
             json.dump(obj, fh, ensure_ascii=False, separators=(",", ":"))
     log.info("Web-App-Daten aktualisiert (%d Tankstellen).", len(latest["stations"]))
