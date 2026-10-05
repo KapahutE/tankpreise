@@ -2,7 +2,7 @@ name: Tankpreise
 
 on:
   schedule:
-    - cron: "4,19,34,49 * * * *"   # alle 15 Minuten Preise abrufen
+    - cron: "1,16,31,46 * * * *"   # alle 15 Minuten Preise abrufen (:01, :16, :31, :46)
     - cron: "37 4 * * 1"             # montags früh (06:37 Sommer- / 05:37 Winterzeit): Wochenreport
   workflow_dispatch:         # manueller Start, z. B. über den Knopf in der iPhone-App
     inputs:
