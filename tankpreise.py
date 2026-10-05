@@ -228,9 +228,9 @@ class Store:
         return out
 
     def changes(self, start=None, end=None):
-        """Preisänderungen (Zeitpunkt, sid, Sorte, alt, neu) im Zeitraum, nur zwischen zwei Abrufen,
-        bei denen die Tankstelle geöffnet war. Entdeckt wird eine Änderung erst beim nächsten Abruf;
-        als Zeitpunkt gilt daher die Mitte zwischen vorherigem und entdeckendem Abruf."""
+        """Preisänderungen (Schätzzeitpunkt, sid, Sorte, alt, neu, von, bis) im Zeitraum, nur zwischen
+        zwei Abrufen, bei denen die Tankstelle geöffnet war. Die Änderung geschah irgendwann zwischen
+        vorherigem Abruf (von) und entdeckendem Abruf (bis); Schätzzeitpunkt = Mitte."""
         events, polls = self._events(start, end)
         state, out = {}, []
         for ts, sid, prices, is_open in events:
@@ -241,7 +241,7 @@ class Store:
                 est = ts - (ts - prev) / 2 if prev and ts - prev <= timedelta(hours=2) else ts
                 for f, a, b in zip(FUELS, old[0], prices):
                     if a is not None and b is not None and abs(a - b) > 1e-9:
-                        out.append((est, sid, f, a, b))
+                        out.append((est, sid, f, a, b, prev if est != ts else ts, ts))
             state[sid] = (prices, is_open)
         return out
 
@@ -528,7 +528,7 @@ def analyse_changes(changes, days):
     Viertelstunden für Erhöhungen bzw. Senkungen."""
     res = {}
     for f in FUELS:
-        ev = [(ts, b - a) for ts, _, ff, a, b in changes if ff == f]
+        ev = [(c[0], c[4] - c[3]) for c in changes if c[2] == f]
         if not ev:
             continue
         up_h, down_h = [0] * 24, [0] * 24
@@ -539,7 +539,7 @@ def analyse_changes(changes, days):
                 up_h[ts.hour] += 1; up_q[q] += 1
             else:
                 down_h[ts.hour] += 1; down_q[q] += 1
-        stations = len({sid for _, sid, ff, _, _ in changes if ff == f})
+        stations = len({c[1] for c in changes if c[2] == f})
         res[f] = {"up_h": up_h, "down_h": down_h, "n": len(ev),
                   "per_day": len(ev) / max(stations, 1) / max(days, 1),
                   "top_up": sorted(up_q, key=up_q.get, reverse=True)[:3],
@@ -858,13 +858,14 @@ def cmd_export(cfg):
                      for sid, p in prev_sum.items()},
         }
 
-        # Preisänderungen der letzten 7 Tage je Tankstelle und Sorte:
-        # flache Liste [Minuten seit Fensterbeginn, Änderung in 1/1000 €, ...]
-        chg = {"start": week_start.isoformat(timespec="minutes"), "stations": {}}
-        for ts, sid, f, a, bb in changes7:
+        # Preisänderungen der letzten 7 Tage je Tankstelle und Sorte, flache Liste aus Dreiergruppen:
+        # [entdeckt (Minuten seit Fensterbeginn), Länge des Zeitraums seit dem vorherigen Abruf in Minuten,
+        #  Änderung in 1/1000 €, ...] – die Änderung geschah irgendwann in diesem Zeitraum
+        chg = {"v": 2, "start": week_start.isoformat(timespec="minutes"), "stations": {}}
+        for est, sid, f, a, bb, frm, to in changes7:
             if sid in inside:
                 lst = chg["stations"].setdefault(sid, {}).setdefault(f, [])
-                lst += [int((ts - week_start).total_seconds() // 60), _cents(bb) - _cents(a)]
+                lst += [int((to - week_start).total_seconds() // 60), int((to - frm).total_seconds() // 60), _cents(bb) - _cents(a)]
 
         reports = []
         for path in sorted(glob.glob(os.path.join(docs, "reports", b["id"], "report_*.html")), reverse=True):

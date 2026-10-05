@@ -701,11 +701,21 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
     };
   }
   // Preisänderungen: changes.json enthält je Tankstelle/Sorte [Minuten seit start, Δ in 1/1000 €, …]
+  // Je Änderung: Zeitraum zwischen zwei Abrufen (from–to), in dem sie passiert ist; t = Mitte (für Auswertungen)
   function stationEvents(chg, id, f) {
     const arr = chg?.stations?.[id]?.[f] || [], t0 = new Date(chg?.start).getTime(), out = [];
-    for (let i = 0; i < arr.length; i += 2) out.push({ t: new Date(t0 + arr[i] * 60000), d: arr[i + 1] / 1000 });
+    if (chg?.v === 2) {
+      for (let i = 0; i < arr.length; i += 3) {
+        const to = t0 + arr[i] * 60000, from = to - arr[i + 1] * 60000;
+        out.push({ t: new Date((from + to) / 2), from: new Date(from), to: new Date(to), d: arr[i + 2] / 1000 });
+      }
+    } else for (let i = 0; i < arr.length; i += 2) out.push({ t: new Date(t0 + arr[i] * 60000), d: arr[i + 1] / 1000 });
     return out;
   }
+  const hm = (d) => d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  const span = (e) => e.from && e.to - e.from > 0
+    ? `${e.to.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })}, ${hm(e.from)}–${hm(e.to)}`
+    : fmtTime(e.t);
   function changeStats(chg, ids, f) {
     if (!chg?.stations) return null;
     const up = Array(24).fill(0), down = Array(24).fill(0), upQ = {}, downQ = {}, ups = [], downs = [];
@@ -759,7 +769,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
     return Object.values(days).map(({ t, vs }) => [dayLabel(t), eur(mean(vs)), eur(Math.min(...vs)), eur(Math.max(...vs))]);
   };
 
-  const qstart = (q) => `${Math.floor(q / 4)}:${String((q % 4) * 15).padStart(2, "0")}`;
+  const qlabel = (q) => { const f = (m) => `${Math.floor(m / 60) % 24}:${String(m % 60).padStart(2, "0")}`; return `${f(q * 15)}–${f(q * 15 + 15)}`; };
   const joinDe = (a) => a.length > 1 ? `${a.slice(0, -1).join(", ")} und ${a[a.length - 1]}` : a.join("");
   function changeCard(c, title, sub) {
     if (!c || c.n < 5) return "";
@@ -767,9 +777,9 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
     return `<div class="card chartcard"><div class="t">${title}</div><div class="s">${sub}</div>${upDownChart(c.up, c.down)}
       <div class="legend"><span><i class="kr" style="background:var(--hi)"></i>Erhöhungen</span><span><i class="kr" style="background:var(--lo)"></i>Senkungen</span></div>
       <div class="facts">
-        ${c.topUp.length ? `<div><span class="arw hi">▲</span> Erhöhungen meist <b>${joinDe(c.topUp.map(qstart))} Uhr</b>${c.avgUp ? ` · Ø ${ct(c.avgUp)}` : ""}</div>` : ""}
-        ${c.topDown.length ? `<div><span class="arw lo">▼</span> Senkungen meist <b>${joinDe(c.topDown.map(qstart))} Uhr</b>${c.avgDown ? ` · Ø ${ct(c.avgDown)}` : ""}</div>` : ""}
-        <div class="sub">Jeweils die Viertelstunde ab der genannten Uhrzeit · ${c.n} Änderungen beobachtet · Ø ${c.perDay.toFixed(1).replace(".", ",")} pro Tankstelle und Tag</div>
+        ${c.topUp.length ? `<div><span class="arw hi">▲</span> Erhöhungen meist <b>${joinDe(c.topUp.map(qlabel))} Uhr</b>${c.avgUp ? ` · Ø ${ct(c.avgUp)}` : ""}</div>` : ""}
+        ${c.topDown.length ? `<div><span class="arw lo">▼</span> Senkungen meist <b>${joinDe(c.topDown.map(qlabel))} Uhr</b>${c.avgDown ? ` · Ø ${ct(c.avgDown)}` : ""}</div>` : ""}
+        <div class="sub">Zugeordnet nach der Mitte des Zeitraums zwischen zwei Abrufen · ${c.n} Änderungen beobachtet · Ø ${c.perDay.toFixed(1).replace(".", ",")} pro Tankstelle und Tag</div>
       </div>
       ${tbl(["Uhrzeit", "▲ Erhöhungen", "▼ Senkungen"], rows)}</div>`;
   }
@@ -1019,11 +1029,12 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
       h += changeCard(changeStats(chg, [s.id], fuel), "Wann ändert diese Tankstelle ihre Preise?", "Anzahl je Uhrzeit, letzte 7 Tage");
       let p = s[fuel];
       const rows = ev.slice().reverse().slice(0, 10).map((e) => {
-        const r = `<tr><td>ca. ${esc(fmtTime(new Date(Math.round(e.t / 3e5) * 3e5)))}</td><td><span class="arw ${e.d > 0 ? "hi" : "lo"}">${e.d > 0 ? "▲" : "▼"}</span> ${ct(e.d)}</td><td>${p != null ? eur(p) : ""}</td></tr>`;
+        const r = `<tr><td>${esc(span(e))}</td><td><span class="arw ${e.d > 0 ? "hi" : "lo"}">${e.d > 0 ? "▲" : "▼"}</span> ${ct(e.d)}</td><td>${p != null ? eur(p) : ""}</td></tr>`;
         if (p != null) p -= e.d;
         return r;
       }).join("");
-      h += `<div class="sec"><h2>Letzte Preisänderungen</h2><span class="sub">${FUELS[fuel]}</span></div><div class="card"><table class="hours chg">${rows}</table></div>`;
+      h += `<div class="sec"><h2>Letzte Preisänderungen</h2><span class="sub">${FUELS[fuel]}</span></div><div class="card"><table class="hours chg">${rows}</table>
+        <div class="small" style="margin-top:8px">Angegeben ist der Zeitraum zwischen zwei Abrufen, in dem der Preis geändert wurde.</div></div>`;
     }
     $("#dstats").innerHTML = h;
   }
