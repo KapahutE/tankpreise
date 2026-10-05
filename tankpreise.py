@@ -328,7 +328,7 @@ def fetch(cfg):
 # --------------------------------------------------------------------------- Öffnungszeiten
 
 HOURS_MAX_AGE = timedelta(days=7)   # Öffnungszeiten ändern sich selten
-HOURS_PER_RUN = 12                  # Obergrenze an Detail-Abfragen pro Lauf
+HOURS_PER_RUN = 5                   # Obergrenze an Detail-Abfragen pro Lauf
 
 _DAY_TOKENS = [
     ("montag", 0), ("dienstag", 1), ("mittwoch", 2), ("donnerstag", 3), ("freitag", 4),
@@ -398,21 +398,35 @@ def update_opening_times(cfg, store, station_ids, now=None):
             # Kein zweiter Versuch und Abbruch für diesen Lauf: lieber später erneut,
             # als Tankerkönig mit Anfragen zu überhäufen
             log.warning("Öffnungszeiten: Abbruch nach Fehler bei %s: %s", sid, e)
-            with open(os.path.join(store.dir, "api_status.json"), "w", encoding="utf-8") as fh:
-                json.dump({"ts": now.isoformat(timespec="minutes"), "detail_error": str(e)[:300],
-                           "station": sid, "fetched_this_run": done}, fh, ensure_ascii=False, indent=1)
+            _api_status(store, detail_error=str(e)[:300], station=sid, fetched_this_run=done)
             break
         hours[sid] = {"fetched": now.isoformat(timespec="minutes"), **normalize_hours(st)}
         done += 1
-        time.sleep(1)
+        time.sleep(3)
     if done:
         store.save_hours(hours)
         log.info("Öffnungszeiten für %d Tankstellen aktualisiert.", done)
 
 
+MIN_INTERVAL = timedelta(minutes=5)   # Tankerkönig: höchstens ein Abruf alle 5 Minuten
+
+
+def _api_status(store, **info):
+    with open(os.path.join(store.dir, "api_status.json"), "w", encoding="utf-8") as fh:
+        json.dump({"ts": datetime.now().isoformat(timespec="minutes"), **info}, fh, ensure_ascii=False, indent=1)
+
+
 def cmd_fetch(cfg):
-    stations = fetch(cfg)
     store = Store(cfg)
+    last = store._state().get("ts")
+    if last and datetime.now() - datetime.fromisoformat(last) < MIN_INTERVAL:
+        log.info("Letzter Abruf um %s liegt weniger als 5 Minuten zurück – übersprungen.", last[11:16])
+        return
+    try:
+        stations = fetch(cfg)
+    except Exception as e:
+        _api_status(store, list_error=str(e)[:300])
+        raise
     n = store.save_snapshot(datetime.now(), stations)
     log.info("%d Tankstellen gespeichert.", n)
     # Fehler bei den Öffnungszeiten dürfen den Preisabruf nie scheitern lassen
