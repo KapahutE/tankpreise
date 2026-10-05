@@ -1,4 +1,7 @@
-# Tankpreis-Monitor Uhingen (73066)
+# Tankpreis-Monitor mit Bases
+
+Feste Orte („Bases“) stehen in `bases.json` – aktuell **Base F** (Uhingen) und **Base H** (Leinfelden), je 25 km. Für sie werden stündlich Preise gesammelt und ausgewertet. In der App lassen sich Ort (Base, eigener Standort, Ortssuche) und Radius (1–25 km) frei wählen; außerhalb der Bases zeigt die App Live-Preise, wenn unter ⚙ ein Tankerkönig-Schlüssel hinterlegt ist.
+
 
 Ruft **stündlich** die Spritpreise (Super E5, E10, Diesel) aller Tankstellen im Umkreis von Uhingen ab, speichert sie und erstellt **jeden Montag** eine Wochenauswertung. Alles läuft kostenlos bei **GitHub**, auch wenn dein iPhone aus ist. Auf dem iPhone bedienst du es über eine **Web-App auf dem Home-Bildschirm**.
 
@@ -44,11 +47,12 @@ Schlägt ein Lauf fehl, etwa wegen eines falschen API-Keys, schickt GitHub dir e
 | `tankpreise.py` | Programm: Abruf, Speicherung, Auswertung (nur Python-Standardbibliothek) |
 | `.github/workflows/tankpreise.yml` | Zeitplan bei GitHub (stündlich + wöchentlich) |
 | `data/prices-JJJJ-MM.csv` | gesammelte Preise, eine Zeile pro Abruf und Tankstelle (lässt sich auch in Numbers/Excel öffnen) |
+| `bases.json` | Feste Orte mit Mittelpunkt und Radius (max. 25 km) |
 | `data/stations.json` | Stammdaten der Tankstellen |
 | `data/opening_times.json` | Öffnungszeiten (werden wöchentlich und für neue Tankstellen abgerufen) |
 | `docs/index.html` | die iPhone-Web-App |
-| `docs/reports/` | Wochenreports (HTML + Markdown) |
-| `docs/data/*.json` | aufbereitete Daten für die App |
+| `docs/reports/<Base>/` | Wochenreports je Base (HTML + Markdown) |
+| `docs/data/bases.json`, `docs/data/<Base>/*.json` | aufbereitete Daten für die App |
 
 ## Lokal auf einem PC/Raspberry Pi (Alternative ohne GitHub)
 

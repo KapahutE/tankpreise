@@ -67,6 +67,32 @@ def resolve(path):
     return path if os.path.isabs(path) else os.path.join(BASE_DIR, path)
 
 
+def load_bases(cfg):
+    """Feste Orte ("Bases") aus bases.json; ohne Datei gilt der Ort aus config.ini."""
+    try:
+        with open(resolve("bases.json"), encoding="utf-8") as fh:
+            bases = json.load(fh)
+    except FileNotFoundError:
+        bases = [{"id": "A", "name": "Base", "place": "Uhingen", "lat": float(cfg["api"]["lat"]),
+                  "lng": float(cfg["api"]["lng"]), "radius_km": float(cfg["api"]["radius_km"])}]
+    for b in bases:
+        b["radius_km"] = min(float(b["radius_km"]), 25.0)  # API-Maximum: 25 km
+    return bases
+
+
+def distance_km(lat1, lng1, lat2, lng2):
+    p = math.pi / 180
+    a = (math.sin((lat2 - lat1) * p / 2) ** 2
+         + math.cos(lat1 * p) * math.cos(lat2 * p) * math.sin((lng2 - lng1) * p / 2) ** 2)
+    return 12742 * math.asin(math.sqrt(a))
+
+
+def base_dist(base, info):
+    if info.get("lat") is None or info.get("lng") is None:
+        return None
+    return distance_km(base["lat"], base["lng"], info["lat"], info["lng"])
+
+
 # --------------------------------------------------------------------------- Speicherung (CSV)
 
 CSV_FIELDS = ["ts", "station_id", "e5", "e10", "diesel", "is_open"]
@@ -222,18 +248,20 @@ def _api_get(endpoint, params, retries=4):
 
 
 def fetch(cfg):
-    params = {
-        "lat": cfg["api"]["lat"], "lng": cfg["api"]["lng"],
-        "rad": min(float(cfg["api"]["radius_km"]), 25.0),  # API-Maximum: 25 km
-        "sort": "dist", "type": "all", "apikey": _api_key(cfg),
-    }
-    return _api_get("list.php", params).get("stations", [])
+    """Ruft alle Bases ab; Tankstellen im Überlappungsbereich zählen nur einmal."""
+    merged = {}
+    for b in load_bases(cfg):
+        params = {"lat": b["lat"], "lng": b["lng"], "rad": b["radius_km"],
+                  "sort": "dist", "type": "all", "apikey": _api_key(cfg)}
+        for s in _api_get("list.php", params).get("stations", []):
+            merged.setdefault(s["id"], s)
+    return list(merged.values())
 
 
 # --------------------------------------------------------------------------- Öffnungszeiten
 
 HOURS_MAX_AGE = timedelta(days=7)   # Öffnungszeiten ändern sich selten
-HOURS_PER_RUN = 40                  # Obergrenze an Detail-Abfragen pro Lauf
+HOURS_PER_RUN = 100                 # Obergrenze an Detail-Abfragen pro Lauf
 
 _DAY_TOKENS = [
     ("montag", 0), ("dienstag", 1), ("mittwoch", 2), ("donnerstag", 3), ("freitag", 4),
@@ -324,14 +352,18 @@ def cmd_fetch(cfg):
 
 # --------------------------------------------------------------------------- Auswertung
 
-def load_week(store, start, end):
+def load_week(store, start, end, base=None):
+    """Preiszeilen im Zeitraum; mit base nur Tankstellen im Umkreis dieser Base."""
     st = store.stations()
-    rows = store.rows(start, end)
-    for r in rows:
+    out = []
+    for r in store.rows(start, end):
         info = st.get(r["sid"], {})
+        r["dist"] = base_dist(base, info) if base else info.get("dist_km")
+        if base and (r["dist"] is None or r["dist"] > base["radius_km"] + 0.05):
+            continue
         r["label"] = station_label(info)
-        r["dist"] = info.get("dist_km")
-    return rows
+        out.append(r)
+    return out
 
 
 def analyse(rows):
@@ -485,16 +517,15 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 """
 
 
-def render_report(res, prev, start, end, cfg):
-    title = f"Tankpreise Uhingen – KW {start.isocalendar()[1]}/{start.year}"
+def render_report(res, prev, start, end, base):
+    title = f"Tankpreise {base['name']} ({base['place']}) – KW {start.isocalendar()[1]}/{start.year}"
     period = f"{start:%d.%m.%Y} – {(end - timedelta(seconds=1)):%d.%m.%Y}"
-    md = [f"# {title}", "", f"Zeitraum: {period} · Umkreis {cfg['api']['radius_km']} km um 73066 Uhingen", ""]
+    area = f"Umkreis {base['radius_km']:g} km um {base['place']}"
+    md = [f"# {title}", "", f"Zeitraum: {period} · {area}", ""]
     h = [f"<!doctype html><html lang='de'><head><meta charset='utf-8'>"
          f"<meta name='viewport' content='width=device-width,initial-scale=1'>"
          f"<title>{html.escape(title)}</title><style>{CSS}</style></head><body>"
-         f"<p class='sub'><a href='../index.html' style='color:var(--acc)'>‹ Zur App</a></p>"
-         f"<h1>{html.escape(title)}</h1><p class='sub'>Zeitraum: {period} · Umkreis "
-         f"{cfg['api']['radius_km']} km um 73066 Uhingen</p>"]
+         f"<h1>{html.escape(title)}</h1><p class='sub'>Zeitraum: {period} · {html.escape(area)}</p>"]
 
     if not res:
         h.append("<p>Keine Daten im Zeitraum vorhanden.</p></body></html>")
@@ -568,99 +599,116 @@ def render_report(res, prev, start, end, cfg):
 
 
 def cmd_report(cfg, days=7, end=None):
+    """Wochenreport je Base unter docs/reports/<Base-ID>/."""
     if end is None:  # Standard: letzte vollständige Woche bis heute 00:00
         end = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     start = end - timedelta(days=days)
     store = Store(cfg)
-    res = analyse(load_week(store, start, end))
-    prev = analyse(load_week(store, start - timedelta(days=days), start))
-    html_s, md_s = render_report(res, prev, start, end, cfg)
-    out_dir = os.path.join(resolve(cfg["storage"]["docs"]), "reports")
-    os.makedirs(out_dir, exist_ok=True)
     y, w, _ = start.isocalendar()
-    base = os.path.join(out_dir, f"report_{y}-KW{w:02d}")
-    with open(base + ".html", "w", encoding="utf-8") as fh:
-        fh.write(html_s)
-    with open(base + ".md", "w", encoding="utf-8") as fh:
-        fh.write(md_s)
-    log.info("Report geschrieben: %s.html / .md", base)
-    print(md_s)
+    for b in load_bases(cfg):
+        res = analyse(load_week(store, start, end, b))
+        prev = analyse(load_week(store, start - timedelta(days=days), start, b))
+        html_s, md_s = render_report(res, prev, start, end, b)
+        out_dir = os.path.join(resolve(cfg["storage"]["docs"]), "reports", b["id"])
+        os.makedirs(out_dir, exist_ok=True)
+        path = os.path.join(out_dir, f"report_{y}-KW{w:02d}")
+        with open(path + ".html", "w", encoding="utf-8") as fh:
+            fh.write(html_s)
+        with open(path + ".md", "w", encoding="utf-8") as fh:
+            fh.write(md_s)
+        log.info("Report geschrieben: %s.html / .md", path)
+        print(md_s, "\n")
     cmd_export(cfg)
-    return base
 
 
 # --------------------------------------------------------------------------- Export für die Web-App
 
+def _cents(v):
+    """2.109 -> 2109 (spart in der App-Datei gut ein Drittel Platz)."""
+    return None if v is None else round(v * 1000)
+
+
 def cmd_export(cfg):
-    """Schreibt docs/data/*.json, die die iPhone-Web-App (docs/index.html) anzeigt."""
+    """Schreibt die Daten für die Web-App: docs/data/bases.json und je Base
+    docs/data/<ID>/latest.json, history.json und reports.json."""
     store = Store(cfg)
     docs = resolve(cfg["storage"]["docs"])
-    out_dir = os.path.join(docs, "data")
-    os.makedirs(out_dir, exist_ok=True)
     st = store.stations()
     hours = store.hours()
     now = datetime.now()
+    bases = load_bases(cfg)
 
-    # Aktuelle Preise: letzter gespeicherter Abruf
-    recent = store.rows(now - timedelta(days=3))
-    latest = {"updated": None, "stations": []}
-    if recent:
-        last_ts = max(r["ts"] for r in recent)
-        latest["updated"] = last_ts.isoformat()
-        for r in recent:
-            if r["ts"] != last_ts:
+    rows14 = store.rows(now - timedelta(days=14))
+    last_ts = max((r["ts"] for r in rows14), default=None)
+    week_start = now - timedelta(days=7)
+    times = sorted({r["ts"] for r in rows14 if r["ts"] >= week_start})
+    idx = {t: i for i, t in enumerate(times)}
+
+    index = []
+    for b in bases:
+        inside = {sid for sid, info in st.items()
+                  if (d := base_dist(b, info)) is not None and d <= b["radius_km"] + 0.05}
+        out_dir = os.path.join(docs, "data", b["id"])
+        os.makedirs(out_dir, exist_ok=True)
+
+        # Aktuelle Preise: letzter Abruf
+        latest = {"updated": last_ts.isoformat() if last_ts else None, "stations": []}
+        for r in rows14:
+            if r["ts"] != last_ts or r["sid"] not in inside:
                 continue
-            info = st.get(r["sid"], {})
+            info = st[r["sid"]]
             latest["stations"].append({
-                "id": r["sid"], **nice_station(info), "dist": info.get("dist_km"),
+                "id": r["sid"], **nice_station(info),
                 "lat": info.get("lat"), "lng": info.get("lng"),
                 "open": r["is_open"], **{f: r[f] for f in FUELS},
                 "hours": {k: v for k, v in hours[r["sid"]].items() if k != "fetched"}
                 if r["sid"] in hours else None,
             })
-        latest["stations"].sort(key=lambda s: s["dist"] or 0)
 
-    # Auswertung der letzten 7 Tage (rollierend) inkl. Vergleich zur Woche davor
-    week = analyse(load_week(store, now - timedelta(days=7), now))
-    prev = analyse(load_week(store, now - timedelta(days=14), now - timedelta(days=7)))
-    summary = {"updated": now.isoformat(timespec="minutes"), "fuels": {}}
-    for f, r in week.items():
-        summary["fuels"][f] = {
-            "mean": r["mean"], "min": r["min"], "max": r["max"],
-            "min_station": r["min_station"], "min_at": r["min_at"].isoformat(),
-            "trend": r["mean"] - prev[f]["mean"] if f in prev else None,
-            "best_hour": r["best_hour"], "worst_hour": r["worst_hour"],
-            "hour_avg": {str(h): v for h, v in r["hour_avg"].items()},
-            "best_wd": r["best_wd"],
-            "ranking": [{"id": s["sid"], "label": s["label"], "mean": s["mean"], "dist": s["dist"]}
-                        for s in r["stations"][:5]],
-            "series": [[t.isoformat(), round(v, 4)] for t, v in r["series"]],
+        # Verlauf der letzten 7 Tage je Tankstelle (Preise in 1/1000 €) + Ø der Vorwoche
+        series, prev_sum = {}, {}
+        for r in rows14:
+            if r["sid"] not in inside:
+                continue
+            if r["ts"] >= week_start:
+                d = series.setdefault(r["sid"], {f: [None] * len(times) for f in FUELS})
+                for f in FUELS:
+                    if r["is_open"] and r[f] is not None:
+                        d[f][idx[r["ts"]]] = _cents(r[f])
+            else:
+                p = prev_sum.setdefault(r["sid"], {f: [] for f in FUELS})
+                for f in FUELS:
+                    if r["is_open"] and r[f] is not None:
+                        p[f].append(r[f])
+        history = {
+            "updated": latest["updated"],
+            "ts": [t.isoformat(timespec="minutes") for t in times],
+            "stations": series,
+            "prev": {sid: {f: _cents(statistics.mean(v)) for f, v in p.items() if v}
+                     for sid, p in prev_sum.items()},
         }
 
-    # Verlauf je Tankstelle (7 Tage) für die Detailansicht der App
-    rows7 = store.rows(now - timedelta(days=7))
-    times = sorted({r["ts"] for r in rows7})
-    idx = {t: i for i, t in enumerate(times)}
-    per_station = {}
-    for r in rows7:
-        d = per_station.setdefault(r["sid"], {f: [None] * len(times) for f in FUELS})
-        for f in FUELS:
-            if r["is_open"] and r[f] is not None:
-                d[f][idx[r["ts"]]] = r[f]
-    history = {"ts": [t.isoformat(timespec="minutes") for t in times], "stations": per_station}
+        reports = []
+        for path in sorted(glob.glob(os.path.join(docs, "reports", b["id"], "report_*.html")), reverse=True):
+            name = os.path.basename(path)
+            reports.append({"file": f"reports/{b['id']}/{name}",
+                            "title": name[7:-5].replace("-KW", " · KW ")})
 
-    # Liste der Wochenreports
-    reports = []
-    for path in sorted(glob.glob(os.path.join(docs, "reports", "report_*.html")), reverse=True):
-        name = os.path.basename(path)
-        reports.append({"file": "reports/" + name,
-                        "title": name[7:-5].replace("-KW", " · KW ")})
+        for fname, obj in (("latest.json", latest), ("history.json", history),
+                           ("reports.json", reports)):
+            with open(os.path.join(out_dir, fname), "w", encoding="utf-8") as fh:
+                json.dump(obj, fh, ensure_ascii=False, separators=(",", ":"))
+        index.append({**b, "stations": len(latest["stations"]), "updated": latest["updated"]})
+        log.info("%s (%s): %d Tankstellen exportiert.", b["name"], b["place"], len(latest["stations"]))
 
-    for fname, obj in (("latest.json", latest), ("summary.json", summary),
-                       ("history.json", history), ("reports.json", reports)):
-        with open(os.path.join(out_dir, fname), "w", encoding="utf-8") as fh:
-            json.dump(obj, fh, ensure_ascii=False, separators=(",", ":"))
-    log.info("Web-App-Daten aktualisiert (%d Tankstellen).", len(latest["stations"]))
+    with open(os.path.join(docs, "data", "bases.json"), "w", encoding="utf-8") as fh:
+        json.dump(index, fh, ensure_ascii=False, separators=(",", ":"))
+    # Dateien des alten Ein-Ort-Formats entfernen
+    for old in ("latest.json", "summary.json", "history.json", "reports.json"):
+        try:
+            os.remove(os.path.join(docs, "data", old))
+        except FileNotFoundError:
+            pass
 
 
 # --------------------------------------------------------------------------- Dauerbetrieb
@@ -691,21 +739,19 @@ def cmd_run(cfg):
 def cmd_demo(cfg, weeks=2):
     """Erzeugt realistisch wirkende Testdaten, um die Auswertung ohne API-Key zu prüfen."""
     rnd = random.Random(42)
-    demo = [
-        ("Aral", "Stuttgarter Str.", "Uhingen", 0.6, 0.04),
-        ("Shell", "Ulmer Str.", "Uhingen", 1.1, 0.03),
-        ("JET", "Salamanderstr.", "Göppingen", 4.8, -0.03),
-        ("Esso", "Heininger Str.", "Göppingen", 5.2, 0.02),
-        ("Agip", "Hauptstr.", "Ebersbach an der Fils", 5.9, 0.0),
-        ("Avia", "Bahnhofstr.", "Albershausen", 3.1, -0.01),
-        ("Total", "Göppinger Str.", "Faurndau", 3.4, 0.01),
-        ("Raiffeisen", "Schorndorfer Str.", "Wangen", 6.5, -0.02),
-    ]
+    brands = ["Aral", "Shell", "JET", "Esso", "Avia", "TotalEnergies", "bft", "Freie Tankstelle", "Eni", "MTB"]
     stations = []
-    for i, (brand, street, place, dist, off) in enumerate(demo):
-        stations.append({"id": f"demo-{i}", "name": f"{brand} {place}", "brand": brand,
-                         "street": street, "houseNumber": str(10 + i), "postCode": "73066",
-                         "place": place, "lat": 48.69 + i * 0.006, "lng": 9.56 + i * 0.008, "dist": dist, "off": off})
+    for b in load_bases(cfg):
+        for i in range(14):
+            ang, r = rnd.uniform(0, 2 * math.pi), b["radius_km"] * math.sqrt(rnd.random())
+            lat = b["lat"] + r * math.cos(ang) / 111.0
+            lng = b["lng"] + r * math.sin(ang) / (111.0 * math.cos(b["lat"] * math.pi / 180))
+            brand = rnd.choice(brands)
+            stations.append({"id": f"demo-{b['id']}-{i}", "name": f"{brand} {b['place']}", "brand": brand,
+                             "street": rnd.choice(["Hauptstr.", "Stuttgarter Str.", "Ulmer Str.", "Bahnhofstr."]),
+                             "houseNumber": str(rnd.randint(1, 120)), "postCode": "70000",
+                             "place": f"{b['place']}-Umgebung", "lat": lat, "lng": lng, "dist": r,
+                             "off": rnd.choice([-0.03, -0.02, -0.01, 0, 0.01, 0.02, 0.04])})
     store = Store(cfg)
     end = datetime.now().replace(minute=0, second=0, microsecond=0)
     t = end - timedelta(weeks=weeks)
@@ -718,7 +764,7 @@ def cmd_demo(cfg, weeks=2):
         snap = []
         for s in stations:
             st = dict(s)
-            st["isOpen"] = 6 <= h <= 22 or s["brand"] in ("Aral", "Shell")
+            st["isOpen"] = 6 <= h <= 21 or s["brand"] in ("Aral", "Shell")
             for f in FUELS:
                 p = base[f] + daily + trend + s["off"] + rnd.choice([0, 0, 0.01, -0.01])
                 st[f] = round(p, 2) + 0.009 if st["isOpen"] else None

@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.webmanifest">
-<title>Tankpreise Uhingen</title>
+<title>Tankpreise</title>
 <style>
 :root{
   --bg:#f2f2f7;--card:#fff;--fg:#1c1c1e;--muted:#6e6e73;--line:#e5e5ea;
@@ -122,15 +122,50 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
 .actions .btn{flex:1}
 .spin{animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* Ortswahl */
+.locbtn{display:inline-flex;align-items:center;gap:6px;background:none;color:var(--acc);font-size:15px;font-weight:600;padding:2px 0;max-width:100%}
+.locbtn span{text-align:left}
+.locbtn svg{flex:none}
+.notice{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--muted)}
+.notice b{color:var(--fg)}
+.opt{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;background:var(--card);border-bottom:1px solid var(--line);text-align:left}
+.opt:first-child{border-radius:12px 12px 0 0} .opt:last-child{border-radius:0 0 12px 12px;border-bottom:0}
+.opt:only-child{border-radius:12px}
+.opt .ic{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;flex:none;font-weight:700;font-size:14px;color:#fff;background:var(--acc)}
+.opt .ic.gps{background:#34c759}
+.opt .ic.pl{background:#8e8e93}
+.opt .t{flex:1;min-width:0} .opt .t div:first-child{font-weight:600}
+.opt .check{color:var(--acc);font-weight:700;visibility:hidden}
+.opt[hidden]{display:none}
+.opt.on .check{visibility:visible}
+.optgroup{margin:6px 0 14px}
+.radius{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:12px;padding:12px 14px}
+.radius input{flex:1;accent-color:var(--acc);padding:0;border:0;background:none;height:28px}
+.radius b{min-width:52px;text-align:right;font-variant-numeric:tabular-nums}
+.search{display:flex;gap:8px}
+.search input{flex:1}
+.search .btn{padding:11px 14px}
+#dlgLoc .inner{max-height:calc(100vh - 80px);overflow-y:auto}
+.grouplabel{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:16px 4px 6px}
+/* Report-Ansicht */
+#report{position:fixed;inset:0;background:var(--bg);z-index:40;display:none;flex-direction:column}
+#report.open{display:flex}
+#report .bar{padding:calc(env(safe-area-inset-top) + 4px) 16px 4px}
+#report iframe{flex:1;border:0;width:100%;background:var(--bg)}
 </style>
 </head>
 <body>
 <div id="ptr"><div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></div></div>
 
 <header>
-  <div>
+  <div style="min-width:0">
     <h1>Tankpreise</h1>
-    <div class="sub" id="stand">Uhingen &amp; Umgebung</div>
+    <button class="locbtn" id="btnLoc" aria-label="Ort und Radius wählen">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+      <span id="locLabel">Ort wählen</span>
+      <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <div class="sub" id="stand"></div>
   </div>
   <div style="display:flex;gap:8px">
     <button class="iconbtn" id="btnFetch" aria-label="Jetzt neu abrufen">
@@ -151,24 +186,51 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
 <main id="main"><div class="empty">Lade Daten …</div></main>
 
 <div id="detail" aria-hidden="true"><div class="wrap" id="detailBody"></div></div>
+<div id="report"><div class="bar"><button class="back" id="btnRepBack"><svg width="12" height="20" viewBox="0 0 12 20"><path d="M10 2L2 10l8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Zurück</button></div><iframe id="repFrame" title="Wochenreport"></iframe></div>
+
+<dialog id="dlgLoc">
+  <div class="inner">
+    <h3>Ort &amp; Radius</h3>
+    <div class="grouplabel">Bases (mit Verlauf &amp; Analyse)</div>
+    <div class="optgroup" id="locBases"></div>
+    <div class="grouplabel">Anderer Ort</div>
+    <div class="optgroup">
+      <button class="opt" id="optGps"><div class="ic gps">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M21.7 2.3a1 1 0 0 0-1.1-.2l-18 8a1 1 0 0 0 .1 1.9l7.4 2 2 7.4a1 1 0 0 0 1.9.1l8-18a1 1 0 0 0-.3-1.2z"/></svg></div>
+        <div class="t"><div>Aktueller Standort</div><div class="sub" id="gpsSub">per Standortfreigabe</div></div><span class="check">✓</span></button>
+      <button class="opt" id="optPlace" hidden><div class="ic pl">⌖</div>
+        <div class="t"><div id="placeName"></div><div class="sub">gesuchter Ort</div></div><span class="check">✓</span></button>
+    </div>
+    <form class="search" id="searchForm">
+      <input id="inSearch" type="search" placeholder="Ort oder PLZ suchen" autocomplete="off" enterkeyhint="search">
+      <button class="btn" type="submit">Suchen</button>
+    </form>
+    <div class="optgroup" id="searchResults" style="margin-top:8px"></div>
+    <div class="grouplabel">Radius</div>
+    <div class="radius"><span class="sub">1</span><input type="range" id="inRadius" min="1" max="25" step="1"><span class="sub">25</span><b id="radiusVal"></b></div>
+    <div class="actions"><button class="btn block" id="btnLocDone" type="button">Fertig</button></div>
+  </div>
+</dialog>
 
 <dialog id="dlg">
   <form method="dialog" class="inner">
     <h3>Einstellungen</h3>
-    <p class="small">Damit der Knopf <b>„Jetzt abrufen“</b> funktioniert, braucht die App einmalig einen GitHub-Zugangsschlüssel.
-      Er wird nur auf diesem iPhone gespeichert.
+    <p class="small">Die App lädt die Preise aus deinem GitHub-Repository und kann dort Abrufe starten.
+      Der Schlüssel wird nur auf diesem Gerät gespeichert.
       <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Schlüssel erstellen</a>
-      (Repository auswählen → Berechtigung <i>Actions: Read and write</i>).</p>
-    <label for="inRepo">Repository (Besitzer/Name)</label>
+      (nur dein Daten-Repository · <i>Contents: Read</i> und <i>Actions: Read and write</i>).</p>
+    <label for="inRepo">Daten-Repository (Besitzer/Name)</label>
     <input id="inRepo" placeholder="benutzer/tankpreise" autocapitalize="off" autocorrect="off" spellcheck="false">
     <label for="inToken">GitHub-Zugangsschlüssel</label>
     <input id="inToken" type="password" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label for="inTk">Tankerkönig-Schlüssel <span class="small">(optional, für Live-Preise außerhalb der Bases)</span></label>
+    <input id="inTk" type="password" placeholder="xxxxxxxx-xxxx-…" autocapitalize="off" autocorrect="off" spellcheck="false">
     <div class="actions">
       <button class="btn secondary" value="cancel">Abbrechen</button>
-      <button class="btn" value="save" id="btnSave">Speichern</button>
+      <button class="btn" value="save">Speichern</button>
     </div>
     <div class="actions">
-      <button class="btn secondary block" value="report" id="btnReport" type="button">Wochenreport jetzt erstellen</button>
+      <button class="btn secondary block" id="btnReport" type="button">Wochenreport jetzt erstellen</button>
     </div>
   </form>
 </dialog>
@@ -179,21 +241,28 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
 (() => {
   const FUELS = { e5: "Super E5", e10: "Super E10", diesel: "Diesel" };
   const WD = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+  const TK = "https://creativecommons.tankerkoenig.de/json";
   const store = {
     get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+    getJ(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+    setJ(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
   };
   let fuel = store.get("fuel", "e5");
   let onlyOpen = store.get("onlyOpen", "0") === "1";
   let sortBy = store.get("sortBy", "price");
-  let latest = null, summary = null, reports = [], history = null, detailId = null;
+  // Ort: {mode: "base"|"gps"|"place", baseId?, lat?, lng?, label?}
+  let loc = store.getJ("loc", { mode: "base", baseId: null });
+  let radius = Number(store.get("radius", "10"));
+  let lastPlace = store.getJ("lastPlace", null);
+
+  let bases = [], view = null, detailId = null, dataMode = null;
 
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const CHEV = `<svg class="chev" width="8" height="14" viewBox="0 0 8 14"><path d="M1 1l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg>`;
   const NAV = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.7 2.3a1 1 0 0 0-1.1-.2l-18 8a1 1 0 0 0 .1 1.9l7.4 2 2 7.4a1 1 0 0 0 1.9.1l8-18a1 1 0 0 0-.3-1.2z"/></svg>`;
 
-  // 1.759 -> "1,75<sup>9</sup>"
   const price = (v) => {
     if (v == null) return "–";
     const s = v.toFixed(3).replace(".", ",");
@@ -215,45 +284,185 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
     const t = $("#toast"); t.textContent = msg; t.classList.add("show");
     clearTimeout(toast._t); if (ms) toast._t = setTimeout(() => t.classList.remove("show"), ms);
   };
+  const distKm = (a, b, c, d) => {
+    const p = Math.PI / 180, x = Math.sin((c - a) * p / 2) ** 2 + Math.cos(a * p) * Math.cos(c * p) * Math.sin((d - b) * p / 2) ** 2;
+    return 12742 * Math.asin(Math.sqrt(x));
+  };
 
-  // ---- Route mit Google Maps: App, falls installiert, sonst Google Maps im Browser
-  function openRoute(s) {
-    const dest = s.lat && s.lng ? `${s.lat},${s.lng}` : `${s.street}, ${s.place}`;
-    const web = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}&travelmode=driving`;
-    const app = `comgooglemaps://?daddr=${encodeURIComponent(dest)}&directionsmode=driving`;
-    let left = false;
-    const onHide = () => { left = true; };
-    document.addEventListener("visibilitychange", onHide, { once: true });
-    location.href = app;
-    setTimeout(() => {
-      document.removeEventListener("visibilitychange", onHide);
-      if (!left && !document.hidden) window.open(web, "_blank") || (location.href = web);
-    }, 1200);
+  // ---- Datenquelle: dieselbe Webseite (öffentliches Repo) oder privates Repo über die GitHub-API
+  function defaultRepo() {
+    const m = location.hostname.match(/^([^.]+)\.github\.io$/);
+    const seg = location.pathname.split("/").filter(Boolean)[0];
+    return m && seg ? `${m[1]}/${seg.replace(/-app$/, "")}` : "";
+  }
+  const repo = () => store.get("repo", "") || defaultRepo();
+  const token = () => store.get("token", "");
+  async function fetchData(path, asText = false) {
+    if (dataMode !== "api") {
+      const r = await fetch(`${path}?t=${Date.now()}`, { cache: "no-store" });
+      if (r.ok) return asText ? r.text() : r.json();
+      if (dataMode === "web" || r.status !== 404) throw new Error(r.status);
+    }
+    if (!token() || !repo()) throw Object.assign(new Error("setup"), { setup: true });
+    const r = await fetch(`https://api.github.com/repos/${repo()}/contents/docs/${path}?ref=main&t=${Date.now()}`, {
+      headers: { Authorization: `Bearer ${token()}`, Accept: "application/vnd.github.raw+json" }, cache: "no-store",
+    });
+    if (r.status === 401 || r.status === 403) throw Object.assign(new Error("Schlüssel ungültig oder ohne Leserecht"), { setup: true });
+    if (!r.ok) throw new Error(`GitHub ${r.status}`);
+    dataMode = "api";
+    return asText ? r.text() : r.json();
+  }
+  async function loadBases() {
+    try { bases = await fetchData("data/bases.json"); if (dataMode !== "api") dataMode = "web"; }
+    catch (e) { bases = []; throw e; }
   }
 
-  async function getJSON(path) {
-    const r = await fetch(`${path}?t=${Date.now()}`, { cache: "no-store" });
-    if (!r.ok) throw new Error(r.status);
-    return r.json();
+  // ---- Ort & Quelle bestimmen
+  function center() {
+    if (loc.mode === "base") {
+      const b = bases.find((x) => x.id === loc.baseId) || bases[0];
+      return b ? { lat: b.lat, lng: b.lng, label: `${b.name} · ${b.place}` } : null;
+    }
+    return loc.lat != null ? { lat: loc.lat, lng: loc.lng, label: loc.label } : null;
   }
-  async function load() {
-    const [l, s, r] = await Promise.allSettled([getJSON("data/latest.json"), getJSON("data/summary.json"), getJSON("data/reports.json")]);
-    latest = l.value || null; summary = s.value || null; reports = r.value || [];
-    history = null;
-    render();
-    if (detailId) renderDetail();
+  // Base, die den Kreis (Mittelpunkt + Radius) komplett abdeckt -> sonst live oder teilweise
+  function pickSource(c) {
+    const cover = bases.map((b) => ({ b, d: distKm(c.lat, c.lng, b.lat, b.lng) }))
+      .filter((x) => x.d + radius <= x.b.radius_km + 0.1).sort((x, y) => x.d - y.d);
+    if (cover.length) return { type: "base", base: cover[0].b };
+    if (store.get("tk", "")) return { type: "live" };
+    const near = bases.map((b) => ({ b, d: distKm(c.lat, c.lng, b.lat, b.lng) })).sort((x, y) => x.d - y.d)[0];
+    return near && near.d < near.b.radius_km + radius ? { type: "partial", base: near.b } : { type: "none" };
+  }
+
+  function getPosition() {
+    return new Promise((res, rej) => {
+      if (!navigator.geolocation) return rej(new Error("Standort wird nicht unterstützt"));
+      navigator.geolocation.getCurrentPosition((p) => res(p.coords), (e) =>
+        rej(new Error(e.code === 1 ? "Standortfreigabe abgelehnt – in den iPhone-Einstellungen erlauben" : "Standort nicht verfügbar")),
+        { enableHighAccuracy: false, maximumAge: 300000, timeout: 15000 });
+    });
+  }
+
+  // ---- Laden
+  const baseCache = {};
+  async function loadBaseData(b) {
+    const latest = await fetchData(`data/${b.id}/latest.json`);
+    const reports = await fetchData(`data/${b.id}/reports.json`).catch(() => []);
+    baseCache[b.id] = { latest, reports, history: baseCache[b.id]?.history?.updated === latest.updated ? baseCache[b.id].history : null };
+    return baseCache[b.id];
   }
   async function loadHistory() {
-    if (!history) { try { history = await getJSON("data/history.json"); } catch { history = { ts: [], stations: {} }; } }
-    return history;
+    if (!view?.base) return null;
+    const c = baseCache[view.base.id];
+    if (!c.history) {
+      try { c.history = await fetchData(`data/${view.base.id}/history.json`); } catch { c.history = { ts: [], stations: {}, prev: {} }; }
+    }
+    return c.history;
   }
 
-  const byId = (id) => latest?.stations?.find((s) => s.id === id);
+  // Live-Abfrage bei Tankerkönig (höchstens alle 5 Minuten je Ort/Radius)
+  async function loadLive(c, force) {
+    const key = `${c.lat.toFixed(3)},${c.lng.toFixed(3)},${radius}`;
+    const cache = store.getJ("liveCache", {});
+    if (!force && cache.key === key && Date.now() - cache.at < 5 * 60000) return cache.data;
+    const r = await fetch(`${TK}/list.php?lat=${c.lat}&lng=${c.lng}&rad=${radius}&sort=dist&type=all&apikey=${encodeURIComponent(store.get("tk", ""))}`);
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.message || "Tankerkönig-Fehler");
+    const data = { updated: new Date().toISOString(), stations: d.stations.map((s) => ({
+      id: s.id, ...niceStation(s), lat: s.lat, lng: s.lng, open: !!s.isOpen,
+      e5: s.e5 || null, e10: s.e10 || null, diesel: s.diesel || null, hours: hoursCache()[s.id]?.h ?? null,
+    })) };
+    store.setJ("liveCache", { key, at: Date.now(), data });
+    return data;
+  }
+  const BRAND = { ARAL: "Aral", ESSO: "Esso", AVIA: "Avia", "AVIA XPRESS": "Avia XPress", "AGIP ENI": "Eni" };
+  function tidy(t) {
+    t = (t || "").trim();
+    const up = (t.match(/[A-ZÄÖÜ]/g) || []).length, lo = (t.match(/[a-zäöüß]/g) || []).length;
+    if (up > Math.max(3, lo)) t = t.toLowerCase().replace(/(^|[\s\-./(])(\S)/g, (m, a, b) => a + b.toUpperCase());
+    return t.replace(/strasse\b/g, "straße").replace(/Strasse\b/g, "Straße");
+  }
+  function niceStation(s) {
+    let brand = (s.brand || s.name || "Tankstelle").trim();
+    if (/^freie tankstelle/i.test(brand)) brand = "Freie Tankstelle";
+    brand = BRAND[brand.toUpperCase()] || brand;
+    const house = String(s.houseNumber || "").replace(/\s*\([^)]*$/, "").trim();
+    return { brand, street: [tidy(s.street), house].filter(Boolean).join(" "), place: tidy(s.place).replace(/^Goeppingen$/, "Göppingen") };
+  }
+  const hoursCache = () => store.getJ("hoursCache", {});
+  async function liveHours(s) {
+    const c = hoursCache();
+    if (c[s.id] && Date.now() - c[s.id].at < 7 * 864e5) return c[s.id].h;
+    const r = await fetch(`${TK}/detail.php?id=${s.id}&apikey=${encodeURIComponent(store.get("tk", ""))}`);
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.message);
+    const st = d.station || {};
+    const h = { wholeDay: !!st.wholeDay, overrides: (st.overrides || []).slice(0, 5).map(String),
+      slots: (st.openingTimes || []).map((o) => ({ text: o.text, start: (o.start || "").slice(0, 5), end: (o.end || "").slice(0, 5), days: parseDays(o.text) })) };
+    c[s.id] = { at: Date.now(), h }; store.setJ("hoursCache", c);
+    return h;
+  }
+  function parseDays(text) {
+    let t = (text || "").toLowerCase().replace(/ä/g, "ae");
+    if (/taeglich|durchgehend/.test(t) || /mo-so/.test(t.replace(/[\s.]/g, ""))) return /aus/.test(t) && /sonn/.test(t) ? [0, 1, 2, 3, 4, 5] : [0, 1, 2, 3, 4, 5, 6];
+    if (/werktag/.test(t)) return [0, 1, 2, 3, 4, 5];
+    const tok = [["montag", 0], ["dienstag", 1], ["mittwoch", 2], ["donnerstag", 3], ["freitag", 4], ["samstag", 5], ["sonnabend", 5], ["sonntag", 6], ["sonn", 6], ["mo", 0], ["di", 1], ["mi", 2], ["do", 3], ["fr", 4], ["sa", 5], ["so", 6]];
+    const found = [];
+    for (const [w, d] of tok) for (const m of t.matchAll(new RegExp(`\\b${w}`, "g")))
+      if (!found.some((f) => m.index >= f[0] && m.index < f[1])) found.push([m.index, m.index + w.length, d]);
+    if (!found.length) return null;
+    found.sort((a, b) => a[0] - b[0]);
+    const days = new Set();
+    found.forEach(([, b, d], i) => {
+      days.add(d);
+      if (i + 1 < found.length && /^[\s.]*(-|–|bis)[\s.]*$/.test(t.slice(b, found[i + 1][0])))
+        for (let k = d; k !== found[i + 1][2]; k = (k + 1) % 7) days.add(k);
+    });
+    return [...days].sort();
+  }
+
+  // Lädt alles für den aktuellen Ort und baut die Ansicht
+  async function load(force = false) {
+    try {
+      if (!bases.length || force) await loadBases();
+    } catch (e) {
+      view = { error: e };
+      return render();
+    }
+    if (loc.mode === "base" && !bases.find((b) => b.id === loc.baseId)) loc = { mode: "base", baseId: bases[0]?.id };
+    if (loc.mode === "gps") {
+      try {
+        const p = await getPosition();
+        loc = { mode: "gps", lat: p.latitude, lng: p.longitude, label: "Mein Standort" };
+      } catch (e) { toast(e.message, 5000); if (loc.lat == null) loc = { mode: "base", baseId: bases[0]?.id }; }
+    }
+    store.setJ("loc", loc);
+    const c = center();
+    if (!c) { view = { error: new Error("Keine Bases konfiguriert") }; return render(); }
+    const src = pickSource(c);
+    try {
+      let data, reports = [];
+      if (src.type === "live") data = await loadLive(c, force);
+      else if (src.base) ({ latest: data, reports } = await loadBaseData(src.base));
+      else data = { updated: null, stations: [] };
+      const stations = data.stations
+        .map((s) => ({ ...s, dist: s.lat != null ? distKm(c.lat, c.lng, s.lat, s.lng) : null }))
+        .filter((s) => s.dist == null || s.dist <= radius + 0.05);
+      view = { center: c, src, base: src.base, live: src.type === "live", updated: data.updated, stations, reports };
+    } catch (e) {
+      view = { center: c, src, error: e };
+    }
+    render();
+    if (detailId) renderDetail();
+    if (view.base && !view.error) loadHistory().then(() => { renderAnalysis(); if (detailId) renderDetail(); });
+  }
+
+  const byId = (id) => view?.stations?.find((s) => s.id === id);
 
   // ---- Öffnungszeiten
   const toMin = (hm) => { const [h, m] = String(hm).split(":").map(Number); return h * 60 + (m || 0); };
   const fmtHM = (m) => m >= 1440 ? "24:00" : `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-  // Zustand laut Öffnungszeiten-Plan: {open, text} oder null, wenn kein Plan bekannt
   function schedule(s, now = new Date()) {
     const H = s.hours;
     if (!H) return null;
@@ -280,114 +489,175 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
     }
     return { open: false, text: "", short: "" };
   }
-  // Geöffnet? Frische API-Daten (< 30 Min.) haben Vorrang, sie kennen auch Feiertage.
-  // Bei älteren Daten zählt der Plan, damit "öffnet um 6:00" auch um 6:05 noch stimmt.
+  // Frische Daten (< 30 Min.) haben Vorrang (kennen Feiertage), sonst zählt der Plan.
   function state(s) {
     const sch = schedule(s);
-    const fresh = latest?.updated && Date.now() - new Date(latest.updated) < 30 * 60000;
+    const fresh = view?.updated && Date.now() - new Date(view.updated) < 30 * 60000;
     const open = !sch || fresh ? s.open : sch.open;
-    return { open, sch, text: sch && sch.open === open ? sch.text : "", short: sch && sch.open === open ? sch.short : "" };
+    return { open, text: sch && sch.open === open ? sch.text : "", short: sch && sch.open === open ? sch.short : "" };
   }
   const hasPrice = (s, f = fuel) => state(s).open && s[f] != null;
 
+  // ---- Auswertung (läuft in der App, damit sie zum gewählten Radius passt)
+  function analyse(hist, ids, f) {
+    if (!hist?.ts?.length) return null;
+    const ts = hist.ts.map((t) => new Date(t));
+    const st = ids.map((id) => [id, hist.stations[id]?.[f]]).filter(([, a]) => a && a.some((v) => v != null));
+    if (!st.length) return null;
+    const all = [], perTs = ts.map(() => []), byHour = {}, byWd = {}, ranking = [];
+    let lo = null, hi = null;
+    for (const [id, arr] of st) {
+      const vals = arr.map((v) => v == null ? null : v / 1000);
+      const days = {};
+      vals.forEach((v, i) => { if (v != null) (days[ts[i].toDateString()] ||= []).push(v); });
+      const dm = Object.fromEntries(Object.entries(days).map(([k, a]) => [k, mean(a)]));
+      const own = vals.filter((v) => v != null), sm = mean(own);
+      ranking.push({ id, mean: sm });
+      vals.forEach((v, i) => {
+        if (v == null) return;
+        all.push(v); perTs[i].push(v);
+        (byHour[ts[i].getHours()] ||= []).push(v - dm[ts[i].toDateString()]);
+        (byWd[(ts[i].getDay() + 6) % 7] ||= []).push(v - sm);
+        if (!lo || v < lo.v) lo = { v, id, t: ts[i] };
+        if (!hi || v > hi.v) hi = { v, id, t: ts[i] };
+      });
+    }
+    const hourAvg = Object.fromEntries(Object.entries(byHour).map(([h, a]) => [h, mean(a)]));
+    const hours = Object.keys(hourAvg).map(Number);
+    const wdAvg = Object.fromEntries(Object.entries(byWd).map(([d, a]) => [d, mean(a)]));
+    const wds = Object.keys(wdAvg).map(Number);
+    const prev = st.map(([id]) => [ranking.find((r) => r.id === id).mean, hist.prev?.[id]?.[f]]).filter(([, p]) => p != null);
+    ranking.sort((a, b) => a.mean - b.mean);
+    return {
+      mean: mean(all), lo, hi, hourAvg, wdAvg, ranking,
+      bestHour: hours.reduce((a, b) => hourAvg[a] <= hourAvg[b] ? a : b),
+      worstHour: hours.reduce((a, b) => hourAvg[a] >= hourAvg[b] ? a : b),
+      bestWd: wds.length > 1 ? wds.reduce((a, b) => wdAvg[a] <= wdAvg[b] ? a : b) : null,
+      trend: prev.length ? mean(prev.map(([m, p]) => m - p / 1000)) : null,
+      series: ts.map((t, i) => [t.getTime(), mean(perTs[i])]).filter((p) => p[1] != null),
+      days: new Set(ts.map((t) => t.toDateString())).size,
+    };
+  }
+  const labelOf = (id) => { const s = byId(id); return s ? `${s.brand}, ${s.place}` : "Tankstelle"; };
+
+  // ---- Darstellung
   function render() {
     document.querySelectorAll("#seg button").forEach((b) => b.classList.toggle("on", b.dataset.f === fuel));
-    $("#stand").textContent = latest?.updated ? `Uhingen & Umgebung\nStand ${ago(latest.updated)}` : "Uhingen & Umgebung";
+    const c = view?.center;
+    $("#locLabel").textContent = c ? `${c.label} · ${radius} km` : "Ort wählen";
+    $("#stand").textContent = view?.updated ? `${view.live ? "Live · " : ""}Stand ${ago(view.updated)}` : "";
     const main = $("#main");
-    if (!latest?.stations?.length) {
-      main.innerHTML = `<div class="card empty">Noch keine Daten vorhanden.<br>Der erste Abruf läuft zur nächsten vollen Stunde – oder tippe oben auf ↻.</div>` + reportsHtml();
+    if (!view) return;
+    if (view.error) {
+      main.innerHTML = view.error.setup
+        ? `<div class="card empty">Die App ist noch nicht eingerichtet.<br>Tippe auf ⚙ und trage deinen GitHub-Zugangsschlüssel ein.<div class="row" style="justify-content:center"><button class="btn" id="btnSetup">Einrichten</button></div></div>`
+        : `<div class="card empty">Daten konnten nicht geladen werden (${esc(view.error.message)}).<br>Zum Neuladen nach unten ziehen.</div>`;
       return;
     }
-    const sum = summary?.fuels?.[fuel];
-    const withPrice = latest.stations.filter((s) => hasPrice(s)).sort((a, b) => a[fuel] - b[fuel] || a.dist - b.dist);
-    const others = latest.stations.filter((s) => !hasPrice(s)).sort((a, b) => a.dist - b.dist);
+    let h = "";
+    if (view.src.type === "partial")
+      h += `<div class="card notice">ℹ️<div><b>Teilweise außerhalb deiner Bases.</b> Es werden nur Tankstellen aus ${esc(view.base.name)} angezeigt. Für vollständige Live-Preise trage unter ⚙ deinen Tankerkönig-Schlüssel ein.</div></div>`;
+    if (view.src.type === "none")
+      h += `<div class="card notice">ℹ️<div><b>Dieser Ort liegt außerhalb deiner Bases.</b> Für Live-Preise trage unter ⚙ deinen Tankerkönig-Schlüssel ein.</div></div>`;
+
+    const withPrice = view.stations.filter((s) => hasPrice(s)).sort((a, b) => a[fuel] - b[fuel] || a.dist - b.dist);
+    const others = view.stations.filter((s) => !hasPrice(s)).sort((a, b) => a.dist - b.dist);
     const best = withPrice[0];
     const avgNow = mean(withPrice.map((s) => s[fuel]));
-    let h = "";
 
     if (best) {
+      const stt = state(best);
       h += `<div class="card hero">
         <div class="label">Am günstigsten gerade · ${FUELS[fuel]}</div>
         <div class="price">${price(best[fuel])} €</div>
         <div class="where">${esc(best.brand)} · ${esc(best.place)}</div>
-        <div class="sub">${esc(best.street)} · ${km(best.dist)}${state(best).text ? " · " + state(best).text : ""}</div>
-        <div class="row">
-          ${withPrice.length > 1 ? `<span class="pill good">${ct(best[fuel] - avgNow)} unter Ø der Umgebung</span>` : ""}
-          ${sum?.trend != null ? `<span class="pill ${sum.trend > 0 ? "bad" : "good"}">Woche ${ct(sum.trend)}</span>` : ""}
+        <div class="sub">${esc(best.street)} · ${km(best.dist)}${stt.text ? " · " + stt.text : ""}</div>
+        <div class="row" id="heroPills">
+          ${withPrice.length > 1 ? `<span class="pill good">${ct(best[fuel] - avgNow)} unter Ø im Umkreis</span>` : ""}
         </div>
         <div class="row two">
           <button class="btn" data-route="${esc(best.id)}">${NAV} Route</button>
           <button class="btn secondary" data-detail="${esc(best.id)}">Details</button>
         </div>
       </div>`;
+    } else if (view.src.type !== "none") {
+      h += `<div class="card empty">Im Umkreis von ${radius} km ist gerade keine Tankstelle mit ${FUELS[fuel]} geöffnet.</div>`;
     }
-
-    if (sum && sum.hour_avg) {
-      const hNow = new Date().getHours();
-      const devNow = sum.hour_avg[String(hNow)];
-      const bh = sum.best_hour;
-      let verdict = "";
-      if (devNow != null) {
-        verdict = devNow <= sum.hour_avg[String(bh)] + 0.01
-          ? "Jetzt ist eine gute Zeit zum Tanken."
-          : devNow > 0.01
-            ? `Jetzt (${hNow} Uhr) ist es typischerweise ${ct(devNow)} teurer als im Tagesmittel – wenn möglich warten.`
-            : `Jetzt (${hNow} Uhr) liegt der Preis meist etwa im Tagesmittel.`;
-      }
-      h += `<div class="card tip"><div class="emoji">💡</div><div>
-        <b>Beste Tankzeit: ${bh}–${bh + 1} Uhr</b> (${ct(sum.hour_avg[String(bh)])} ggü. Tagesmittel)<br>
-        <span class="sub">${verdict} Am teuersten: ${sum.worst_hour}–${sum.worst_hour + 1} Uhr.
-        ${sum.best_wd != null ? `Günstigster Wochentag: ${WD[sum.best_wd]}.` : ""}</span></div></div>`;
-    }
+    h += `<div id="tip"></div>`;
 
     let list = [...withPrice, ...(onlyOpen ? [] : others)];
     if (sortBy === "dist") list = [...list].sort((a, b) => a.dist - b.dist);
-    h += `<h2>Tankstellen <span class="sub">${withPrice.length} mit Preis</span></h2>
-      <div class="chips">
-        <button class="chip ${sortBy === "price" ? "on" : ""}" data-sort="price">Nach Preis</button>
-        <button class="chip ${sortBy === "dist" ? "on" : ""}" data-sort="dist">Nach Entfernung</button>
-        <button class="chip ${onlyOpen ? "on" : ""}" data-open>Nur geöffnete</button>
-      </div><div class="list">`;
-    for (const s of list) {
-      const has = hasPrice(s);
-      const d = has && best ? s[fuel] - best[fuel] : null;
-      const stt = state(s);
-      h += `<button class="item ${has ? "" : "closed"} ${s === best ? "best" : ""}" data-detail="${esc(s.id)}">
-        <div class="info"><div class="name">${esc(s.brand)}${stt.open && stt.short ? ` <span class="hrs">· ${esc(stt.short)}</span>` : ""}</div>
-          <div class="addr">${km(s.dist)} · ${esc(s.place)}, ${esc(s.street)}</div></div>
-        <div class="p">${has ? `<b>${price(s[fuel])}</b><div class="d">${d ? ct(d) : "günstigste"}</div>` : `<div class="d">${stt.open ? "kein " + FUELS[fuel] : "geschlossen"}${!stt.open && stt.short ? "<br>" + esc(stt.short) : ""}</div>`}</div>
-        ${CHEV}</button>`;
-    }
-    if (!list.length) h += `<div class="empty">Gerade hat keine Tankstelle geöffnet.</div>`;
-    h += `</div>`;
-
-    if (sum) {
-      h += `<h2>Letzte 7 Tage</h2>
-        <div class="stats">
-          <div class="card"><span class="sub">Ø Preis</span><b>${eur(sum.mean)}</b></div>
-          <div class="card"><span class="sub">Tiefstpreis</span><b style="color:var(--good)">${eur(sum.min)}</b>
-            <span class="sub">${esc(sum.min_station.split(",")[0])}</span></div>
-        </div>
-        <div class="card"><div class="sub" style="margin-bottom:6px">Durchschnittspreis im Verlauf</div>${lineChart(sum.series.map(([t, v]) => [new Date(t).getTime(), v]))}</div>
-        <div class="card"><div class="sub" style="margin-bottom:6px">Abweichung nach Uhrzeit (grün = günstiger)</div>${hourChart(sum.hour_avg, sum.best_hour)}</div>`;
-      if (sum.ranking?.length) {
-        h += `<h2>Günstigste im Wochenschnitt</h2><div class="list">` + sum.ranking.map((r, i) => `<button class="item" ${r.id ? `data-detail="${esc(r.id)}"` : ""}><div class="info">
-          <div class="name">${i + 1}. ${esc(r.label.split(",")[0])}</div><div class="addr">${esc(r.label.split(",").slice(1).join(",").trim())}</div></div>
-          <div class="p"><b>${price(r.mean)}</b><div class="d">Ø Woche</div></div>${r.id ? CHEV : ""}</button>`).join("") + `</div>`;
+    if (view.stations.length) {
+      h += `<h2>Tankstellen <span class="sub">${withPrice.length} von ${view.stations.length} mit Preis</span></h2>
+        <div class="chips">
+          <button class="chip ${sortBy === "price" ? "on" : ""}" data-sort="price">Nach Preis</button>
+          <button class="chip ${sortBy === "dist" ? "on" : ""}" data-sort="dist">Nach Entfernung</button>
+          <button class="chip ${onlyOpen ? "on" : ""}" data-open>Nur geöffnete</button>
+        </div><div class="list">`;
+      for (const s of list.slice(0, 60)) {
+        const has = hasPrice(s), stt = state(s);
+        const d = has && best ? s[fuel] - best[fuel] : null;
+        h += `<button class="item ${has ? "" : "closed"} ${s === best ? "best" : ""}" data-detail="${esc(s.id)}">
+          <div class="info"><div class="name">${esc(s.brand)}${stt.open && stt.short ? ` <span class="hrs">· ${esc(stt.short)}</span>` : ""}</div>
+            <div class="addr">${km(s.dist)} · ${esc(s.place)}, ${esc(s.street)}</div></div>
+          <div class="p">${has ? `<b>${price(s[fuel])}</b><div class="d">${d ? ct(d) : "günstigste"}</div>` : `<div class="d">${stt.open ? "kein " + FUELS[fuel] : "geschlossen"}${!stt.open && stt.short ? "<br>" + esc(stt.short) : ""}</div>`}</div>
+          ${CHEV}</button>`;
       }
+      if (list.length > 60) h += `<div class="empty" style="padding:14px">… und ${list.length - 60} weitere. Radius verkleinern für eine kürzere Liste.</div>`;
+      if (!list.length) h += `<div class="empty">Gerade hat keine Tankstelle geöffnet.</div>`;
+      h += `</div>`;
     }
-    h += reportsHtml();
+    h += `<div id="analysis"></div>`;
+    if (view.reports?.length) {
+      h += `<h2>Wochenreports <span class="sub">${esc(view.base.name)}</span></h2><div class="list">` + view.reports.map((r) =>
+        `<button class="item" data-report="${esc(r.file)}"><div class="info"><div class="name">${esc(r.title)}</div></div>${CHEV}</button>`).join("") + `</div>`;
+    }
     h += `<p class="sub" style="text-align:center;margin-top:24px">Daten: Tankerkönig / MTS-K (CC BY 4.0)</p>`;
     main.innerHTML = h;
+    renderAnalysis();
   }
 
-  function reportsHtml() {
-    if (!reports.length) return "";
-    return `<h2>Wochenreports</h2><div class="list">` + reports.map((r) =>
-      `<a class="item" href="${esc(r.file)}"><div class="info"><div class="name">${esc(r.title)}</div></div>${CHEV}</a>`).join("") + `</div>`;
+  function renderAnalysis() {
+    if (!view || view.error || !$("#analysis")) return;
+    const hist = view.base && baseCache[view.base.id]?.history;
+    if (view.live) {
+      $("#analysis").innerHTML = `<div class="card notice" style="margin-top:12px">📈<div>Verlauf, beste Tankzeit und Wochenreports gibt es für Orte innerhalb von ${bases.map((b) => esc(b.name)).join(" und ")}.</div></div>`;
+      return;
+    }
+    if (!hist) { $("#analysis").innerHTML = ""; return; }
+    const sum = analyse(hist, view.stations.map((s) => s.id), fuel);
+    if (!sum) { $("#analysis").innerHTML = ""; return; }
+    if (sum.trend != null && $("#heroPills"))
+      $("#heroPills").insertAdjacentHTML("beforeend", `<span class="pill ${sum.trend > 0 ? "bad" : "good"}">Woche ${ct(sum.trend)}</span>`);
+    if (sum.days > 1) {
+      const hNow = new Date().getHours(), devNow = sum.hourAvg[hNow], bh = sum.bestHour;
+      let verdict = "";
+      if (devNow != null) verdict = devNow <= sum.hourAvg[bh] + 0.01 ? "Jetzt ist eine gute Zeit zum Tanken."
+        : devNow > 0.01 ? `Jetzt (${hNow} Uhr) ist es typischerweise ${ct(devNow)} teurer als im Tagesmittel – wenn möglich warten.`
+        : `Jetzt (${hNow} Uhr) liegt der Preis meist etwa im Tagesmittel.`;
+      $("#tip").innerHTML = `<div class="card tip"><div class="emoji">💡</div><div>
+        <b>Beste Tankzeit: ${bh}–${bh + 1} Uhr</b> (${ct(sum.hourAvg[bh])} ggü. Tagesmittel)<br>
+        <span class="sub">${verdict} Am teuersten: ${sum.worstHour}–${sum.worstHour + 1} Uhr.
+        ${sum.bestWd != null ? `Günstigster Wochentag: ${WD[sum.bestWd]}.` : ""}</span></div></div>`;
+    }
+    let h = `<h2>${sum.days >= 6 ? "Letzte 7 Tage" : "Bisher gesammelt"} <span class="sub">${radius} km</span></h2>
+      <div class="stats">
+        <div class="card"><span class="sub">Ø Preis</span><b>${eur(sum.mean)}</b></div>
+        <div class="card"><span class="sub">Tiefstpreis</span><b style="color:var(--good)">${eur(sum.lo.v)}</b>
+          <span class="sub">${esc(labelOf(sum.lo.id))}</span></div>
+      </div>
+      <div class="card"><div class="sub" style="margin-bottom:6px">Durchschnittspreis im Verlauf</div>${lineChart(sum.series)}</div>`;
+    if (sum.days > 1) h += `<div class="card"><div class="sub" style="margin-bottom:6px">Abweichung nach Uhrzeit (grün = günstiger)</div>${hourChart(sum.hourAvg, sum.bestHour)}</div>`;
+    h += `<h2>Günstigste im Schnitt</h2><div class="list">` + sum.ranking.slice(0, 5).map((r, i) => {
+      const s = byId(r.id);
+      return `<button class="item" data-detail="${esc(r.id)}"><div class="info">
+        <div class="name">${i + 1}. ${esc(s?.brand ?? "Tankstelle")}</div><div class="addr">${km(s?.dist)} · ${esc(s?.place ?? "")}, ${esc(s?.street ?? "")}</div></div>
+        <div class="p"><b>${price(r.mean)}</b><div class="d">Ø Woche</div></div>${CHEV}</button>`;
+    }).join("") + `</div>`;
+    $("#analysis").innerHTML = h;
   }
 
-  // ---- Detailansicht einer Tankstelle
+  // ---- Detailansicht
   function openDetail(id) {
     if (!byId(id)) return;
     detailId = id;
@@ -404,54 +674,55 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
     document.body.classList.remove("lock");
     if (!fromPop) try { window.history.back(); } catch {}
   }
-  window.addEventListener("popstate", () => closeDetail(true));
+  window.addEventListener("popstate", () => { closeReport(); closeDetail(true); });
 
   async function renderDetail() {
     const s = byId(detailId);
     if (!s) return;
-    const body = $("#detailBody");
+    if (view.live && !s.hours && store.get("tk", "")) liveHours(s).then((h) => { s.hours = h; if (detailId === s.id) renderDetail(); }).catch(() => {});
     const tiles = Object.keys(FUELS).map((f) => {
-      const all = latest.stations.filter((x) => hasPrice(x, f)).sort((a, b) => a[f] - b[f]);
+      const all = view.stations.filter((x) => hasPrice(x, f)).sort((a, b) => a[f] - b[f]);
       const rank = all.findIndex((x) => x.id === s.id) + 1;
       return `<button class="ftile ${f === fuel ? "on" : ""}" data-fuel="${f}"><div class="n">${FUELS[f]}</div>
         <b>${hasPrice(s, f) ? price(s[f]) : "–"}</b>
         <div class="r">${rank ? `Platz ${rank}/${all.length}` : state(s).open ? "nicht angeboten" : "geschlossen"}</div></button>`;
     }).join("");
-    const all = latest.stations.filter((x) => hasPrice(x));
-    const avgNow = mean(all.map((x) => x[fuel]));
-    const diffNow = hasPrice(s) ? s[fuel] - avgNow : null;
-    body.innerHTML = `
+    const all = view.stations.filter((x) => hasPrice(x));
+    const diffNow = hasPrice(s) ? s[fuel] - mean(all.map((x) => x[fuel])) : null;
+    const stt = state(s);
+    $("#detailBody").innerHTML = `
       <button class="back" id="btnBack"><svg width="12" height="20" viewBox="0 0 12 20"><path d="M10 2L2 10l8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Zurück</button>
       <div class="dhead"><h1>${esc(s.brand)}</h1>
-        <div class="sub">${esc(s.street)}, ${esc(s.place)} · ${km(s.dist)} von Uhingen</div>
+        <div class="sub">${esc(s.street)}, ${esc(s.place)} · ${km(s.dist)} entfernt</div>
         <div class="row" style="margin-top:8px">
-          <span class="pill ${state(s).open ? "good" : "neutral"}">${state(s).open ? "Geöffnet" : "Geschlossen"}${state(s).text ? " · " + esc(state(s).text.replace(/^geöffnet /, "")) : ""}</span>
+          <span class="pill ${stt.open ? "good" : "neutral"}">${stt.open ? "Geöffnet" : "Geschlossen"}${stt.text ? " · " + esc(stt.text.replace(/^geöffnet /, "")) : ""}</span>
           ${diffNow != null && all.length > 1 ? `<span class="pill ${diffNow > 0.0005 ? "bad" : "good"}">${ct(diffNow)} ggü. Ø jetzt</span>` : ""}
         </div></div>
       <div class="fuelgrid">${tiles}</div>
       <button class="btn block" data-route="${esc(s.id)}">${NAV} Route mit Google Maps</button>
       ${hoursCard(s)}
-      <div id="dstats"><div class="empty">Lade Verlauf …</div></div>
-      <p class="sub" style="text-align:center;margin-top:24px">Stand ${ago(latest.updated)}</p>`;
+      <div id="dstats">${view.live ? "" : `<div class="empty">Lade Verlauf …</div>`}</div>
+      <p class="sub" style="text-align:center;margin-top:24px">Stand ${ago(view.updated)}</p>`;
+    if (view.live) return;
 
     const hist = await loadHistory();
-    if (detailId !== s.id) return;
-    const own = hist.stations?.[s.id]?.[fuel] || [];
+    if (detailId !== s.id || !hist) return;
     const ts = hist.ts.map((t) => new Date(t).getTime());
-    const regAvg = ts.map((_, i) => mean(Object.values(hist.stations).map((x) => x[fuel]?.[i]).filter((v) => v != null)));
+    const own = (hist.stations?.[s.id]?.[fuel] || []).map((v) => v == null ? null : v / 1000);
+    const ids = view.stations.map((x) => x.id);
+    const regAvg = ts.map((_, i) => mean(ids.map((id) => hist.stations[id]?.[fuel]?.[i]).filter((v) => v != null)) / 1000);
     const pts = ts.map((t, i) => [t, own[i]]).filter((p) => p[1] != null);
-    const regPts = ts.map((t, i) => [t, regAvg[i]]).filter((p) => p[1] != null);
+    const regPts = ts.map((t, i) => [t, regAvg[i]]).filter((p) => p[1] != null && !Number.isNaN(p[1]));
     let h = "";
     if (pts.length < 2) {
       h = `<div class="card empty" style="margin-top:12px">Für diese Tankstelle gibt es noch zu wenige ${FUELS[fuel]}-Daten. Nach ein paar Stunden erscheint hier der Verlauf.</div>`;
     } else {
       const vals = pts.map((p) => p[1]);
       const avg = mean(vals);
-      const regMean = mean(pts.map((p) => regAvg[ts.indexOf(p[0])]).filter((v) => v != null));
+      const regMean = mean(pts.map((p) => regAvg[ts.indexOf(p[0])]).filter((v) => v != null && !Number.isNaN(v)));
       const lo = Math.min(...vals), hi = Math.max(...vals);
       const loAt = pts.find((p) => p[1] === lo)[0];
       let changes = 0; for (let i = 1; i < vals.length; i++) if (Math.abs(vals[i] - vals[i - 1]) > 1e-9) changes++;
-      // Tageszeit-Profil: Abweichung vom jeweiligen Tagesmittel der Tankstelle
       const days = {};
       pts.forEach(([t, v]) => { const k = new Date(t).toDateString(); (days[k] ||= []).push(v); });
       const dayMean = Object.fromEntries(Object.entries(days).map(([k, a]) => [k, mean(a)]));
@@ -474,7 +745,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
         </div>
         <div class="card"><div class="sub" style="margin-bottom:6px">Preisverlauf</div>
           ${lineChart(pts, regPts)}
-          <div class="legend"><span><i></i>${esc(s.brand)}</span><span><i class="dash"></i>Ø Umgebung</span></div></div>`;
+          <div class="legend"><span><i></i>${esc(s.brand)}</span><span><i class="dash"></i>Ø Umkreis</span></div></div>`;
       if (Object.keys(days).length > 1)
         h += `<div class="card"><div class="sub" style="margin-bottom:6px">Abweichung nach Uhrzeit an dieser Tankstelle</div>${hourChart(hourAvg, bestH)}</div>`;
     }
@@ -484,7 +755,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
   function hoursCard(s) {
     const H = s.hours;
     let body;
-    if (!H) body = `<div class="sub">Die Öffnungszeiten werden beim nächsten Abruf geladen.</div>`;
+    if (!H) body = `<div class="sub">${view.live ? (store.get("tk", "") ? "Öffnungszeiten werden geladen …" : "Keine Öffnungszeiten verfügbar.") : "Die Öffnungszeiten werden beim nächsten Abruf geladen."}</div>`;
     else if (H.wholeDay) body = `<div><b>Durchgehend geöffnet</b> – 24 Stunden, 7 Tage.</div>`;
     else if (!H.slots?.length) body = `<div class="sub">Keine Öffnungszeiten hinterlegt.</div>`;
     else {
@@ -497,6 +768,18 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
     }
     return `<h2>Öffnungszeiten</h2><div class="card">${body}</div>`;
   }
+
+  // ---- Wochenreport anzeigen (funktioniert auch bei privatem Repository)
+  async function openReport(file) {
+    try {
+      const html = await fetchData(file, true);
+      $("#repFrame").srcdoc = html;
+      $("#report").classList.add("open");
+      try { window.history.pushState({ r: 1 }, ""); } catch {}
+    } catch (e) { toast("Report konnte nicht geladen werden: " + e.message, 5000); }
+  }
+  function closeReport() { $("#report").classList.remove("open"); }
+  $("#btnRepBack").addEventListener("click", () => { closeReport(); try { window.history.back(); } catch {} });
 
   // ---- Diagramme
   function lineChart(pts, ref) {
@@ -513,8 +796,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
       const v = lo + (hi - lo) * i / 2, y = Y(v);
       g += `<line class="gl" x1="${L}" x2="${W - R}" y1="${y}" y2="${y}"/><text x="${L - 4}" y="${y + 4}" text-anchor="end">${v.toFixed(2).replace(".", ",")}</text>`;
     }
-    const multiDay = t1 - t0 > 864e5 * 1.2;
-    if (multiDay) {
+    if (t1 - t0 > 864e5 * 1.2) {
       const d0 = new Date(t0); d0.setHours(24, 0, 0, 0);
       for (let d = d0; d.getTime() < t1; d = new Date(d.getTime() + 864e5)) {
         const x = X(d.getTime());
@@ -531,10 +813,9 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
     const path = (p) => p.map(([t, v]) => `${X(t).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
     return `<svg class="chart" viewBox="0 0 ${W} ${H}">${g}${ref && ref.length > 1 ? `<polyline class="ln2" points="${path(ref)}"/>` : ""}<polyline class="ln" points="${path(pts)}"/></svg>`;
   }
-
   function hourChart(hourAvg, bestHour) {
     const W = 340, H = 130, L = 6, R = 6, T = 8, B = 18;
-    const vals = Array.from({ length: 24 }, (_, i) => hourAvg[String(i)] ?? null);
+    const vals = Array.from({ length: 24 }, (_, i) => hourAvg[i] ?? hourAvg[String(i)] ?? null);
     const m = Math.max(0.001, ...vals.filter((v) => v != null).map(Math.abs));
     const zero = T + (H - T - B) / 2, sc = (H - T - B) / 2 / m, bw = (W - L - R) / 24, now = new Date().getHours();
     let g = `<line class="gl" x1="${L}" x2="${W - R}" y1="${zero}" y2="${zero}"/>`;
@@ -550,59 +831,111 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
     return `<svg class="chart" viewBox="0 0 ${W} ${H}">${g}</svg>`;
   }
 
-  // ---- GitHub-Workflow starten (Knopf "Jetzt abrufen")
-  function defaultRepo() {
-    const m = location.hostname.match(/^([^.]+)\.github\.io$/);
-    const seg = location.pathname.split("/").filter(Boolean)[0];
-    return m && seg ? `${m[1]}/${seg}` : "";
+  // ---- Route mit Google Maps: App, falls installiert, sonst Browser
+  function openRoute(s) {
+    const dest = s.lat && s.lng ? `${s.lat},${s.lng}` : `${s.street}, ${s.place}`;
+    const web = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}&travelmode=driving`;
+    let left = false;
+    const onHide = () => { left = true; };
+    document.addEventListener("visibilitychange", onHide, { once: true });
+    location.href = `comgooglemaps://?daddr=${encodeURIComponent(dest)}&directionsmode=driving`;
+    setTimeout(() => {
+      document.removeEventListener("visibilitychange", onHide);
+      if (!left && !document.hidden) window.open(web, "_blank") || (location.href = web);
+    }, 1200);
   }
+
+  // ---- Ortswahl
+  function renderLocDialog() {
+    $("#locBases").innerHTML = bases.map((b) => `<button class="opt ${loc.mode === "base" && loc.baseId === b.id ? "on" : ""}" data-base="${esc(b.id)}">
+      <div class="ic">${esc(b.id)}</div><div class="t"><div>${esc(b.name)}</div><div class="sub">${esc(b.place)} · bis ${b.radius_km} km</div></div><span class="check">✓</span></button>`).join("");
+    $("#optGps").classList.toggle("on", loc.mode === "gps");
+    $("#optPlace").hidden = !lastPlace;
+    if (lastPlace) { $("#placeName").textContent = lastPlace.label; $("#optPlace").classList.toggle("on", loc.mode === "place"); }
+    $("#inRadius").value = radius; $("#radiusVal").textContent = `${radius} km`;
+  }
+  let locChanged = false;
+  function setLoc(l) { loc = l; locChanged = true; store.setJ("loc", loc); renderLocDialog(); }
+  $("#btnLoc").addEventListener("click", () => { locChanged = false; renderLocDialog(); $("#searchResults").innerHTML = ""; $("#dlgLoc").showModal(); });
+  $("#locBases").addEventListener("click", (e) => { const b = e.target.closest("[data-base]"); if (b) setLoc({ mode: "base", baseId: b.dataset.base }); });
+  $("#optGps").addEventListener("click", async () => {
+    $("#gpsSub").textContent = "Standort wird ermittelt …";
+    try {
+      const p = await getPosition();
+      setLoc({ mode: "gps", lat: p.latitude, lng: p.longitude, label: "Mein Standort" });
+      $("#gpsSub").textContent = "per Standortfreigabe";
+    } catch (e) { $("#gpsSub").textContent = e.message; }
+  });
+  $("#optPlace").addEventListener("click", () => lastPlace && setLoc({ mode: "place", ...lastPlace }));
+  $("#searchForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const q = $("#inSearch").value.trim(); if (!q) return;
+    $("#searchResults").innerHTML = `<div class="sub" style="padding:8px 4px">Suche …</div>`;
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=de&limit=5&accept-language=de&q=${encodeURIComponent(q)}`);
+      const res = await r.json();
+      $("#searchResults").innerHTML = res.length ? res.map((x, i) => {
+        const a = x.display_name.split(", ");
+        return `<button class="opt" data-hit="${i}"><div class="ic pl">⌖</div><div class="t"><div>${esc(a[0])}</div><div class="sub">${esc(a.slice(1, 4).join(", "))}</div></div></button>`;
+      }).join("") : `<div class="sub" style="padding:8px 4px">Nichts gefunden.</div>`;
+      $("#searchResults").onclick = (ev) => {
+        const b = ev.target.closest("[data-hit]"); if (!b) return;
+        const x = res[b.dataset.hit];
+        lastPlace = { lat: Number(x.lat), lng: Number(x.lon), label: x.display_name.split(", ")[0] };
+        store.setJ("lastPlace", lastPlace);
+        $("#searchResults").innerHTML = ""; $("#inSearch").value = "";
+        setLoc({ mode: "place", ...lastPlace });
+      };
+    } catch { $("#searchResults").innerHTML = `<div class="sub" style="padding:8px 4px">Suche gerade nicht möglich.</div>`; }
+  });
+  $("#inRadius").addEventListener("input", (e) => {
+    radius = Number(e.target.value); store.set("radius", String(radius));
+    $("#radiusVal").textContent = `${radius} km`; locChanged = true;
+  });
+  $("#btnLocDone").addEventListener("click", () => $("#dlgLoc").close());
+  $("#dlgLoc").addEventListener("close", () => { if (locChanged) load(); });
+
+  // ---- Abruf bei GitHub starten (Knopf ↻)
   async function dispatch(aktion) {
-    const repo = store.get("repo", defaultRepo()), token = store.get("token", "");
-    if (!repo || !token) { openSettings(); return; }
+    if (view?.live) { toast("Live-Preise werden aktualisiert …"); return load(true); }
+    if (!repo() || !token()) { openSettings(); return; }
     const btn = $("#btnFetch svg"); btn.classList.add("spin");
     try {
-      const r = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/tankpreise.yml/dispatches`, {
+      const r = await fetch(`https://api.github.com/repos/${repo()}/actions/workflows/tankpreise.yml/dispatches`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+        headers: { Authorization: `Bearer ${token()}`, Accept: "application/vnd.github+json" },
         body: JSON.stringify({ ref: "main", inputs: { aktion } }),
       });
       if (r.status !== 204) throw new Error(r.status === 401 || r.status === 403 ? "Schlüssel ungültig oder ohne Berechtigung" : `GitHub-Fehler ${r.status}`);
       toast(aktion === "report" ? "Wochenreport wird erstellt – dauert ca. 1–2 Minuten." : "Abruf gestartet – neue Preise in ca. 1–2 Minuten.", 0);
-      await waitForUpdate(aktion === "report" ? "summary.json" : "latest.json");
+      const before = JSON.stringify(bases.map((b) => b.updated)), beforeRep = view?.reports?.length;
+      for (let i = 0; i < 24; i++) {
+        await new Promise((res) => setTimeout(res, 15000));
+        try {
+          const b = await fetchData("data/bases.json");
+          if (JSON.stringify(b.map((x) => x.updated)) !== before || aktion === "report" && i > 6) { await load(true); toast("Aktualisiert ✓"); return; }
+        } catch {}
+      }
+      toast("Dauert länger als erwartet – später neu laden.", 5000);
     } catch (e) {
       toast("Fehler: " + e.message, 6000);
     } finally { btn.classList.remove("spin"); }
   }
-  async function waitForUpdate(file) {
-    const before = (file === "latest.json" ? latest : summary)?.updated;
-    for (let i = 0; i < 24; i++) {
-      await new Promise((r) => setTimeout(r, 15000));
-      try {
-        const d = await getJSON("data/" + file);
-        if (d.updated !== before) { await load(); toast("Aktualisiert ✓"); return; }
-      } catch {}
-    }
-    toast("Dauert länger als erwartet – später neu laden.", 5000);
-  }
 
   function openSettings() {
-    $("#inRepo").value = store.get("repo", defaultRepo());
-    $("#inToken").value = store.get("token", "");
+    $("#inRepo").value = store.get("repo", "") || defaultRepo();
+    $("#inToken").value = token();
+    $("#inTk").value = store.get("tk", "");
     $("#dlg").showModal();
   }
-  $("#dlg").addEventListener("close", () => {
-    if ($("#dlg").returnValue === "save") {
-      store.set("repo", $("#inRepo").value.trim());
-      store.set("token", $("#inToken").value.trim());
-      toast("Gespeichert.");
-    }
-  });
-  $("#btnReport").addEventListener("click", () => {
+  function saveSettings() {
     store.set("repo", $("#inRepo").value.trim());
     store.set("token", $("#inToken").value.trim());
-    $("#dlg").close();
-    dispatch("report");
-  });
+    store.set("tk", $("#inTk").value.trim());
+    dataMode = null; bases = [];
+  }
+  $("#dlg").addEventListener("close", () => { if ($("#dlg").returnValue === "save") { saveSettings(); toast("Gespeichert."); load(true); } });
+  $("#btnReport").addEventListener("click", () => { saveSettings(); $("#dlg").close(); dispatch("report"); });
   $("#btnSettings").addEventListener("click", openSettings);
   $("#btnFetch").addEventListener("click", () => dispatch("abrufen"));
   $("#seg").addEventListener("click", (e) => {
@@ -610,13 +943,14 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
     fuel = f; store.set("fuel", f); render();
   });
 
-  // Klicks in Liste und Detailansicht
   document.addEventListener("click", (e) => {
-    const el = e.target.closest("[data-route],[data-detail],[data-fuel],[data-sort],[data-open],#btnBack");
+    const el = e.target.closest("[data-route],[data-detail],[data-fuel],[data-sort],[data-open],[data-report],#btnBack,#btnSetup");
     if (!el) return;
     if (el.id === "btnBack") return closeDetail();
+    if (el.id === "btnSetup") return openSettings();
     if (el.dataset.route) return openRoute(byId(el.dataset.route));
     if (el.dataset.detail) return openDetail(el.dataset.detail);
+    if (el.dataset.report) return openReport(el.dataset.report);
     if (el.dataset.fuel) { fuel = el.dataset.fuel; store.set("fuel", fuel); render(); return renderDetail(); }
     if (el.dataset.sort) { sortBy = el.dataset.sort; store.set("sortBy", sortBy); return render(); }
     if (el.hasAttribute("data-open")) { onlyOpen = !onlyOpen; store.set("onlyOpen", onlyOpen ? "1" : "0"); return render(); }
@@ -633,7 +967,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
 
   // Ziehen nach unten zum Aktualisieren
   const ptr = $("#ptr"); let py = null, pull = 0, busy = false;
-  window.addEventListener("touchstart", (e) => { py = !detailId && window.scrollY <= 0 && !busy ? e.touches[0].clientY : null; pull = 0; }, { passive: true });
+  window.addEventListener("touchstart", (e) => { py = !detailId && window.scrollY <= 0 && !busy && !document.querySelector("dialog[open]") ? e.touches[0].clientY : null; pull = 0; }, { passive: true });
   window.addEventListener("touchmove", (e) => {
     if (py == null) return;
     pull = Math.max(0, e.touches[0].clientY - py);
@@ -644,14 +978,14 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
     if (py == null) return; py = null;
     if (pull > 70) {
       busy = true; ptr.querySelector("svg").classList.add("spin");
-      await load().catch(() => {});
+      await load(true).catch(() => {});
       ptr.querySelector("svg").classList.remove("spin"); busy = false;
     }
     ptr.style.opacity = 0; ptr.firstElementChild.style.transform = "";
   });
 
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
-  load();
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) load(true); });
+  load(true);
 })();
 </script>
 </body>

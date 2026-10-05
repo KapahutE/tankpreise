@@ -58,9 +58,17 @@ jobs:
           for i in 1 2 3 4; do git pull -q --rebase && git push -q && exit 0; sleep $((2**i)); done
           exit 1
 
-      - uses: actions/configure-pages@v6
-      - uses: actions/upload-pages-artifact@v5
+      # Webseite nur bei öffentlichem Repository; bei privatem lädt die App die Daten über die GitHub-API
+      - id: repo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "private=$(gh api repos/${{ github.repository }} --jq .private)" >> "$GITHUB_OUTPUT"
+      - if: steps.repo.outputs.private == 'false'
+        uses: actions/configure-pages@v6
+      - if: steps.repo.outputs.private == 'false'
+        uses: actions/upload-pages-artifact@v5
         with:
           path: docs
       - id: deploy
+        if: steps.repo.outputs.private == 'false'
         uses: actions/deploy-pages@v5
