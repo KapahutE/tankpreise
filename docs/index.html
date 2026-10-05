@@ -148,6 +148,8 @@ button{font:inherit;border:0;cursor:pointer;color:inherit;background:none}
 /* Kartenansicht */
 .mapcard{padding:0;overflow:hidden;height:min(64vh,540px);position:relative}
 #map{width:100%;height:100%}
+.maperr{position:absolute;left:10px;right:10px;top:10px;z-index:500;background:var(--card);color:var(--muted);font-size:13px;padding:8px 12px;border-radius:12px;box-shadow:var(--shadow)}
+@media (prefers-color-scheme:dark){#map.osm .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9)}}
 .leaflet-container{background:var(--card2);font:inherit}
 .leaflet-control-attribution{background:var(--bg-a)!important;color:var(--muted)!important;font-size:10px!important}
 .leaflet-control-attribution a{color:var(--muted)!important}
@@ -1078,7 +1080,28 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
     css: "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css", cssI: "sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=",
   };
   const darkMq = matchMedia("(prefers-color-scheme: dark)");
-  const tileUrl = () => `https://{s}.basemaps.cartocdn.com/${darkMq.matches ? "dark_all" : "light_all"}/{z}/{x}/{y}{r}.png`;
+  // Kartenhintergrund: CARTO; liefert der Dienst keine Kacheln, automatisch OpenStreetMap
+  const TILES = [
+    { url: () => `https://{s}.basemaps.cartocdn.com/${darkMq.matches ? "dark_all" : "light_all"}/{z}/{x}/{y}{r}.png`, subdomains: "abcd",
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · © <a href="https://carto.com/attributions">CARTO</a>' },
+    { url: () => "https://tile.openstreetmap.org/{z}/{x}/{y}.png", subdomains: "",
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', osm: true },
+  ];
+  let tileIdx = 0, tileOk = 0, tileErr = 0;
+  const tileUrl = () => TILES[tileIdx].url();
+  function makeTiles() {
+    const t = TILES[tileIdx];
+    tileOk = 0; tileErr = 0;
+    mapEl.classList.toggle("osm", !!t.osm);
+    tiles = L.tileLayer(t.url(), { subdomains: t.subdomains || "abc", maxZoom: 19, attribution: t.attribution })
+      .on("tileload", () => { tileOk++; mapEl.querySelector(".maperr")?.remove(); })
+      .on("tileerror", () => {
+        if (++tileErr < 4 || tileOk) return;
+        if (tileIdx < TILES.length - 1) { map.removeLayer(tiles); tileIdx++; makeTiles(); }
+        else if (!mapEl.querySelector(".maperr")) mapEl.insertAdjacentHTML("beforeend", '<div class="maperr">Kartenhintergrund gerade nicht erreichbar – Tankstellen werden trotzdem angezeigt.</div>');
+      })
+      .addTo(map);
+  }
   const mapEl = document.createElement("div"); mapEl.id = "map";
   let leafletP = null, map = null, tiles = null, layer = null, fitKey = "";
   function loadLeaflet() {
@@ -1100,10 +1123,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
     if (!map) {
       map = L.map(mapEl, { zoomControl: false, zoomSnap: 0.5 });
       map.attributionControl.setPrefix(false);
-      tiles = L.tileLayer(tileUrl(), {
-        subdomains: "abcd", maxZoom: 19,
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · © <a href="https://carto.com/attributions">CARTO</a>',
-      }).addTo(map);
+      makeTiles();
       layer = L.layerGroup().addTo(map);
       map.on("moveend", drawMarkers);
       darkMq.addEventListener?.("change", () => tiles.setUrl(tileUrl()));
