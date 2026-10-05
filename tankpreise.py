@@ -20,6 +20,7 @@ Nur Python-Standardbibliothek, keine zusätzlichen Pakete nötig.
 """
 
 import argparse
+from array import array
 import bisect
 import configparser
 import csv
@@ -785,6 +786,199 @@ def cmd_report(cfg, days=7, end=None):
 
 # --------------------------------------------------------------------------- Export für die Web-App
 
+# --------------------------------------------------------------------------- Preisprognose
+# Lernendes Modell ohne Fremddienste. Jede Tankstelle hat ein typisches Tagesprofil: die Abweichung
+# vom eigenen Tagesmittel je Viertelstunde. Mit wenigen Daten "leiht" sich das Profil das Muster der
+# Marke bzw. aller Tankstellen (Schrumpfung), mit mehr Daten zählt das eigene.
+# Prognose = letzter Preis − Profil(damals) + Profil(Zielzeit) [+ gedämpfter Trend, wenn er hilft].
+# Freigegeben wird sie nur, wenn sie im Rückblick-Test die Annahme "Preis bleibt gleich" klar schlägt.
+
+FC_STEP_MIN = 15
+FC_SLOTS = 24 * 60 // FC_STEP_MIN      # 96 Viertelstunden je Tag
+FC_TRAIN_DAYS = 21                     # so weit zurück wird gelernt
+FC_PRIOR = 3.0                         # Gewicht des Marken-/Gesamtprofils (in "Tagen")
+FC_MIN_TRAIN_DAYS = 2                  # mindestens so viele Tage zum Lernen …
+FC_MIN_TEST_STEPS = FC_SLOTS // 2      # … plus mindestens 12 Stunden zum Prüfen
+FC_HORIZON_H = 24                      # Prognose für die nächsten 24 Stunden
+FC_EVAL_H = 12                         # Güte wird für 1–12 Stunden voraus bewertet
+FC_MAX_GAP = timedelta(minutes=70)     # länger ohne Abruf -> Lücke statt Fortschreiben
+FC_MIN_GAIN = 0.10                     # muss "Preis bleibt gleich" um mindestens 10 % schlagen
+
+
+def fc_grid(store, start, end):
+    """Preise (1/1000 €) je Tankstelle und Sorte auf einem 15-Minuten-Raster; -1 = geschlossen/unbekannt."""
+    events, polls = store._events(start, end)
+    t0 = start.replace(minute=start.minute - start.minute % FC_STEP_MIN, second=0, microsecond=0)
+    n = int((end - t0) / timedelta(minutes=FC_STEP_MIN)) + 1
+    grid, state, ei, pi, last_poll = {}, {}, 0, 0, None
+    for k in range(n):
+        cut = t0 + timedelta(minutes=FC_STEP_MIN * k + FC_STEP_MIN / 2)   # Mitte der Viertelstunde
+        while ei < len(events) and events[ei][0] <= cut:
+            state[events[ei][1]] = events[ei][2:]
+            ei += 1
+        while pi < len(polls) and polls[pi] <= cut:
+            last_poll = polls[pi]
+            pi += 1
+        if last_poll is None or cut - last_poll > FC_MAX_GAP:
+            continue
+        for sid, (prices, is_open) in state.items():
+            if not is_open:
+                continue
+            arrs = grid.get(sid)
+            if arrs is None:
+                arrs = grid[sid] = [array("i", [-1]) * n for _ in FUELS]
+            for j, v in enumerate(prices):
+                if v is not None:
+                    arrs[j][k] = round(v * 1000)
+    return t0, n, grid
+
+
+class FcModel:
+    """Tagesprofile je Tankstelle/Sorte (gelernt aus den Rasterpunkten [0, k_end)) und Trend je Sorte."""
+
+    def __init__(self, t0, grid, brands, k_end):
+        self.slot0 = (t0.hour * 60 + t0.minute) // FC_STEP_MIN
+        raw, pool, diffs = {}, {}, {j: [] for j in range(len(FUELS))}
+        for sid, arrs in grid.items():
+            for j, a in enumerate(arrs):
+                dsum, dcnt = {}, {}
+                for k in range(k_end):
+                    if a[k] >= 0:
+                        d = (self.slot0 + k) // FC_SLOTS
+                        dsum[d] = dsum.get(d, 0) + a[k]
+                        dcnt[d] = dcnt.get(d, 0) + 1
+                days = sorted(d for d in dcnt if dcnt[d] >= FC_SLOTS // 4)   # nur Tage mit ≥ 6 h Daten
+                if not days:
+                    continue
+                dmean = {d: dsum[d] / dcnt[d] for d in days}
+                s, c = [0.0] * FC_SLOTS, [0] * FC_SLOTS
+                for k in range(k_end):
+                    if a[k] >= 0:
+                        d = (self.slot0 + k) // FC_SLOTS
+                        if d in dmean:
+                            sl = (self.slot0 + k) % FC_SLOTS
+                            s[sl] += a[k] - dmean[d]
+                            c[sl] += 1
+                raw[(sid, j)] = (s, c)
+                for key in ("b:" + brands.get(sid, ""), "g:"):
+                    ps, pc = pool.setdefault((key, j), ([0.0] * FC_SLOTS, [0] * FC_SLOTS))
+                    for i in range(FC_SLOTS):
+                        ps[i] += s[i]
+                        pc[i] += c[i]
+                diffs[j] += [dmean[b] - dmean[a_] for a_, b in zip(days[-4:], days[-3:]) if b == a_ + 1]
+        self.prof = {}
+        for (sid, j), (s, c) in raw.items():
+            gs, gc = pool[("g:", j)]
+            g = [gs[i] / gc[i] if gc[i] else 0.0 for i in range(FC_SLOTS)]
+            bs, bc = pool[("b:" + brands.get(sid, ""), j)]
+            b = [(bs[i] + FC_PRIOR * g[i]) / (bc[i] + FC_PRIOR) for i in range(FC_SLOTS)]
+            self.prof[(sid, j)] = [(s[i] + FC_PRIOR * b[i]) / (c[i] + FC_PRIOR) for i in range(FC_SLOTS)]
+        # Trend: Median der Tagesmittel-Änderungen, gedämpft und begrenzt (je Rasterschritt)
+        self.trend = {j: max(-15, min(15, statistics.median(v) * 0.5)) / FC_SLOTS if v else 0.0 for j, v in diffs.items()}
+
+    def predict(self, sid, j, a, k, h, use_trend):
+        """(Prognose, letzter Preis) für Rasterpunkt k + h, bekannt sind Daten bis einschließlich k."""
+        P = self.prof.get((sid, j))
+        if P is None:
+            return None, None
+        ka = k
+        while ka >= 0 and k - ka < FC_SLOTS and a[ka] < 0:
+            ka -= 1
+        if ka < 0 or a[ka] < 0:
+            return None, None
+        v = a[ka] - P[(self.slot0 + ka) % FC_SLOTS] + P[(self.slot0 + k + h) % FC_SLOTS]
+        if use_trend:
+            v += self.trend[j] * (k + h - ka)
+        return v, a[ka]
+
+
+def fc_build(store, now=None):
+    """Lernt das Modell, prüft es an den letzten Tagen und erstellt die 24-Stunden-Prognose."""
+    now = now or datetime.now()
+    st = store.stations()
+    brands = {sid: nice_station(info)["brand"] for sid, info in st.items()}
+    t0, n, grid = fc_grid(store, now - timedelta(days=FC_TRAIN_DAYS), now)
+    first = min((k for arrs in grid.values() for a in arrs for k in range(n) if a[k] >= 0), default=None)
+    res = {"t0": t0, "n": n, "grid": grid, "days": 0.0, "errors": {}, "use_trend": False, "model": None,
+           "available_from": None}
+    if first is None:
+        return res
+    k_last = n - 1
+    res["days"] = (k_last - first) / FC_SLOTS
+    test = min(2 * FC_SLOTS, k_last + 1 - first - FC_MIN_TRAIN_DAYS * FC_SLOTS)
+    if test < FC_MIN_TEST_STEPS:
+        res["available_from"] = t0 + timedelta(minutes=FC_STEP_MIN * (first + FC_MIN_TRAIN_DAYS * FC_SLOTS + FC_MIN_TEST_STEPS))
+    else:
+        # Rückblick-Test: lernen bis k_split, dann alle 2 Stunden 1–12 Stunden voraus prognostizieren
+        k_split = k_last + 1 - test
+        m = FcModel(t0, grid, brands, k_split)
+        tot = [0.0, 0.0]
+        for sid, arrs in grid.items():
+            e = [[0.0, 0.0, 0.0, 0] for _ in range(FC_EVAL_H)]   # Modell, Modell+Trend, unverändert, Anzahl
+            for j, a in enumerate(arrs):
+                for o in range(k_split, k_last, 8):
+                    for hh in range(1, FC_EVAL_H + 1):
+                        h = hh * 60 // FC_STEP_MIN
+                        if o + h > k_last:
+                            break
+                        if a[o + h] < 0:
+                            continue
+                        pm, naive = m.predict(sid, j, a, o, h, False)
+                        if pm is None:
+                            continue
+                        pt, _ = m.predict(sid, j, a, o, h, True)
+                        r = e[hh - 1]
+                        r[0] += abs(pm - a[o + h]); r[1] += abs(pt - a[o + h]); r[2] += abs(naive - a[o + h]); r[3] += 1
+                        tot[0] += abs(pm - a[o + h]); tot[1] += abs(pt - a[o + h])
+            res["errors"][sid] = e
+        res["use_trend"] = tot[1] < tot[0]
+        res["model"] = FcModel(t0, grid, brands, n)   # für die echte Prognose mit allen Daten
+    return res
+
+
+def fc_export(fc, inside, now):
+    """forecast.json für eine Base: Güte aus dem Rückblick-Test und – wenn gut genug – die Prognose."""
+    out = {"generated": now.isoformat(timespec="minutes"), "days": round(fc["days"], 1), "ok": False,
+           "available_from": fc["available_from"].isoformat(timespec="minutes") if fc["available_from"] else None}
+    if not fc["errors"]:
+        return out
+    col = 1 if fc["use_trend"] else 0
+    agg = [[0.0, 0.0, 0] for _ in range(FC_EVAL_H)]
+    for sid in inside:
+        for hh, r in enumerate(fc["errors"].get(sid, [])):
+            agg[hh][0] += r[col]; agg[hh][1] += r[2]; agg[hh][2] += r[3]
+    cnt = sum(a[2] for a in agg)
+    if not cnt:
+        return out
+    mae = [round(a[0] / a[2] / 10, 2) if a[2] else None for a in agg]     # in Cent
+    naive = [round(a[1] / a[2] / 10, 2) if a[2] else None for a in agg]
+    m_all, n_all = sum(a[0] for a in agg) / cnt, sum(a[1] for a in agg) / cnt
+    out.update({"quality": {"mae": mae, "naive": naive, "mae_avg": round(m_all / 10, 2), "naive_avg": round(n_all / 10, 2), "n": cnt},
+                "trend": fc["use_trend"]})
+    out["ok"] = cnt >= 300 and m_all <= (1 - FC_MIN_GAIN) * n_all
+    if not out["ok"] or fc["model"] is None:
+        return out
+    t0, n, grid, m = fc["t0"], fc["n"], fc["grid"], fc["model"]
+    t_last = t0 + timedelta(minutes=FC_STEP_MIN * (n - 1))
+    start = (t_last + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+    out["start"], out["step_min"] = start.isoformat(timespec="minutes"), 60
+    stations = {}
+    for sid in inside:
+        arrs = grid.get(sid)
+        if not arrs:
+            continue
+        for j, f in enumerate(FUELS):
+            vals = []
+            for i in range(FC_HORIZON_H):
+                h = round((start + timedelta(hours=i) - t_last) / timedelta(minutes=FC_STEP_MIN))
+                v, _ = m.predict(sid, j, arrs[j], n - 1, h, fc["use_trend"])
+                vals.append(None if v is None else round(v))
+            if any(v is not None for v in vals):
+                stations.setdefault(sid, {})[f] = vals
+    out["stations"] = stations
+    return out
+
+
 def _cents(v):
     """2.109 -> 2109 (spart in der App-Datei gut ein Drittel Platz)."""
     return None if v is None else round(v * 1000)
@@ -814,6 +1008,9 @@ def cmd_export(cfg):
         current = {r["sid"]: r for r in rows14 if r["ts"] == last_ts}
     times = sorted({r["ts"] for r in rows14 if r["ts"] >= week_start})
     idx = {t: i for i, t in enumerate(times)}
+    t_fc = time.time()
+    fc = fc_build(store, now)
+    log.info("Prognosemodell: %.1f Tage Daten, gelernt und geprüft in %.1f s.", fc["days"], time.time() - t_fc)
 
     index = []
     for b in bases:
@@ -873,8 +1070,9 @@ def cmd_export(cfg):
             reports.append({"file": f"reports/{b['id']}/{name}",
                             "title": name[7:-5].replace("-KW", " · KW ")})
 
+        forecast = fc_export(fc, inside, now)
         for fname, obj in (("latest.json", latest), ("history.json", history),
-                           ("changes.json", chg), ("reports.json", reports)):
+                           ("changes.json", chg), ("forecast.json", forecast), ("reports.json", reports)):
             with open(os.path.join(out_dir, fname), "w", encoding="utf-8") as fh:
                 json.dump(obj, fh, ensure_ascii=False, separators=(",", ":"))
         index.append({**b, "stations": len(latest["stations"]), "updated": latest["updated"]})

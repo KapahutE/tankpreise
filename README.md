@@ -75,3 +75,15 @@ Für den Dauerbetrieb gibt es `crontab.example` und `tankpreise.service` (system
 - Laut Tankerkönig-Nutzungsbedingungen sind automatische Abrufe höchstens alle 5 Minuten erlaubt; stündlich ist unproblematisch. Der Suchradius beträgt höchstens 25 km und ist in `config.example.ini` bzw. `tankpreise.py` einstellbar (Standard: 10 km).
 - Preise ändern sich oft mehrmals pro Stunde. Ein stündlicher Abruf erfasst deshalb nicht jede Änderung, für Tageszeit-Muster reicht er aber gut aus.
 - Die „beste Tankzeit“ ist die mittlere Abweichung jeder Stunde vom Tagesmittel der jeweiligen Tankstelle über die letzten 7 Tage.
+
+## Preisprognose
+
+Bei jedem Abruf lernt ein kleines Modell aus den Daten der letzten 21 Tage (nur Python-Bordmittel, kein Fremddienst):
+
+- Jede Tankstelle hat ein **Tagesprofil**: die typische Abweichung vom eigenen Tagesmittel je Viertelstunde.
+  Mit wenigen Daten „leiht“ sich das Profil das Muster der Marke bzw. aller Tankstellen, mit mehr Daten zählt das eigene.
+- **Prognose** = letzter Preis − Profil zum Zeitpunkt des letzten Preises + Profil zur Zielzeit (plus gedämpfter Trend, falls er sich bewährt).
+- **Rückblick-Test:** Das Modell lernt ohne die letzten 1–2 Tage und sagt diese dann alle 2 Stunden für 1–12 Stunden voraus.
+  Angezeigt wird die Prognose nur, wenn sie die Annahme „Preis bleibt gleich“ um mindestens 10 % schlägt;
+  der gemessene Fehler erscheint in der App als Band (± ct).
+- Ergebnis je Base in `docs/data/<Base>/forecast.json`. Frühestens nach ~2,5 Tagen Daten verfügbar.
