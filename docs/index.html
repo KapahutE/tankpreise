@@ -389,7 +389,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     <input id="inToken" type="password" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false">
     <label for="inTk">Tankerkönig-Schlüssel <span class="small">(optional, für Live-Preise außerhalb der Bases)</span></label>
     <input id="inTk" type="password" placeholder="xxxxxxxx-xxxx-…" autocapitalize="off" autocorrect="off" spellcheck="false">
-    <label class="check"><input id="inDialect" type="checkbox"> Tipps auf Schwäbisch</label>
+    <label class="check"><input id="inDialect" type="checkbox"> <span>Auf Schwäbisch <span class="small">(Tipps, Überschriften, Wochenfazit)</span></span></label>
     <div class="actions">
       <button class="btn secondary" value="cancel">Abbrechen</button>
       <button class="btn" value="save">Speichern</button>
@@ -410,7 +410,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
 (() => {
   const FUELS = { e5: "Super E5", e10: "Super E10", diesel: "Diesel" };
   const WD = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-  // Tipps auf Schwäbisch (abschaltbar unter ⚙): say(schwäbisch, hochdeutsch)
+  // Auf Schwäbisch (abschaltbar unter ⚙): Tipps, Überschriften und kurze Hinweise. say(schwäbisch, hochdeutsch)
   const SW = () => store.get("dialect", "1") === "1";
   const say = (schw, hoch) => SW() ? schw : hoch;
   const WD_LONG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
@@ -938,7 +938,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     h += `<div id="tip"></div><div id="fc"></div>`;
 
     if (view.stations.length) {
-      h += `<div class="sec"><h2>Tankstellen</h2>
+      h += `<div class="sec"><h2>${say("Tankstella", "Tankstellen")}</h2>
         <div class="seg mini"><button data-view="list" class="${viewMode === "list" ? "on" : ""}">Liste</button><button data-view="map" class="${viewMode === "map" ? "on" : ""}">Karte</button></div></div>
         <div class="chips">
           ${viewMode === "list" ? `<button class="chip ${sortBy === "price" ? "on" : ""}" data-sort="price">Nach Preis</button>
@@ -961,14 +961,14 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
             <div class="p">${has ? `<b>${price(s[fuel])}</b><div class="d">${d ? ct(d) : "günstigste"}</div>` : `<div class="d">${stt.open ? "kein " + FUELS[fuel] : "geschlossen"}${!stt.open && stt.short ? "<br>" + esc(stt.short) : ""}</div>`}</div>
             ${CHEV}</button>`;
         }
-        if (list.length > 60) h += `<div class="more">… und ${list.length - 60} weitere. Radius verkleinern oder Karte nutzen.</div>`;
-        if (!list.length) h += `<div class="empty">Gerade hat keine Tankstelle geöffnet.</div>`;
+        if (list.length > 60) h += `<div class="more">${say(`… ond no ${list.length - 60} weitere – Radius kleiner macha oder d'Kart nemma.`, `… und ${list.length - 60} weitere. Radius verkleinern oder Karte nutzen.`)}</div>`;
+        if (!list.length) h += `<div class="empty">${say("Grad hot koine offa.", "Gerade hat keine Tankstelle geöffnet.")}</div>`;
         h += `</div>`;
       }
     }
     h += `<div id="analysis"></div>`;
     if (view.reports?.length) {
-      h += `<div class="sec"><h2>Wochenreports</h2><span class="sub">${esc(view.base.name)}</span></div><div class="list">` + view.reports.map((r) =>
+      h += `<div class="sec"><h2>${say("D'Woch im Rückblick", "Wochenreports")}</h2><span class="sub">${esc(view.base.name)}</span></div><div class="list">` + view.reports.map((r) =>
         `<button class="item" data-report="${esc(r.file)}"><div class="badge rank">📊</div><div class="info"><div class="name"><span>${esc(r.title)}</span></div></div>${CHEV}</button>`).join("") + `</div>`;
     }
     h += `<p class="foot">Schwabensprit${say(" – mir kennet älles, au billig tanka", "")} · Daten: Tankerkönig / MTS-K (CC BY 4.0)</p>`;
@@ -1006,7 +1006,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
         <p class="verdict">${verdict}${sum.bestWd != null ? say(` Am billigschde isch's meischtens am ${WD_SCHW[sum.bestWd]}.`, ` Günstigster Wochentag: ${WD_LONG[sum.bestWd]}.`) : ""}</p>
       </section>`;
     }
-    let h = `<div class="sec"><h2>${sum.days >= 6 ? "Letzte 7 Tage" : "Bisher gesammelt"}</h2><span class="sub">${FUELS[fuel]} · ${radius} km</span></div>
+    let h = `<div class="sec"><h2>${sum.days >= 6 ? say("Die letschde 7 Täg", "Letzte 7 Tage") : say("Bis etz gsammelt", "Bisher gesammelt")}</h2><span class="sub">${FUELS[fuel]} · ${radius} km</span></div>
       <div class="stats">
         <div class="card stat"><span class="eyebrow">Ø Preis</span><span class="v">${eur(sum.mean)}</span>${sum.trend != null ? pill(sum.trend, `${ct(sum.trend)} ggü. Vorwoche`) : ""}</div>
         <div class="card stat"><span class="eyebrow">Tiefstpreis</span><span class="v">${eur(sum.lo.v)}</span><span class="sub">${esc(labelOf(sum.lo.id))} · ${esc(fmtTime(sum.lo.t))}</span></div>
@@ -1015,13 +1015,13 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
         ${lineChart([{ name: "Ø im Umkreis", pts: sum.series }])}
         ${tbl(["Tag", "Ø", "Tief", "Hoch"], dailyRows(sum.series))}</div>`;
     if (sum.days > 1) {
-      h += `<div class="card chartcard"><div class="t">Preis nach Uhrzeit</div><div class="s">Abweichung vom Tagesmittel der jeweiligen Tankstelle</div>
+      h += `<div class="card chartcard"><div class="t">Preis nach Uhrzeit</div><div class="s">${say("Abweichung vom Tagesschnitt der jeweiligen Tankstelle", "Abweichung vom Tagesmittel der jeweiligen Tankstelle")}</div>
         ${devBars(sum.hourAvg, sum.bestHour)}
         <div class="legend"><span><i class="kr" style="background:var(--lo)"></i>günstiger</span><span><i class="kr" style="background:var(--hi)"></i>teurer</span><span>▼ jetzt</span></div>
         ${tbl(["Uhrzeit", "Abweichung"], Object.keys(sum.hourAvg).map(Number).sort((a, b) => a - b).map((hh) => [`${hh}–${hh + 1} Uhr`, ct(sum.hourAvg[hh])]))}</div>`;
     }
-    h += changeCard(changeStats(cache.changes, ids, fuel), "Wann ändern sich die Preise?", "Anzahl der Erhöhungen und Senkungen je Uhrzeit");
-    h += `<div class="sec"><h2>Günstigste im Schnitt</h2><span class="sub">Ø der Woche</span></div><div class="list">` + sum.ranking.slice(0, 5).map((r, i) => {
+    h += changeCard(changeStats(cache.changes, ids, fuel), say("Wann drehet se am Preis?", "Wann ändern sich die Preise?"), "Anzahl der Erhöhungen und Senkungen je Uhrzeit");
+    h += `<div class="sec"><h2>${say("Im Schnitt am billigschde", "Günstigste im Schnitt")}</h2><span class="sub">Ø der Woche</span></div><div class="list">` + sum.ranking.slice(0, 5).map((r, i) => {
       const s = byId(r.id);
       return `<button class="item" data-detail="${esc(r.id)}"><div class="badge rank">${i + 1}</div><div class="info">
         <div class="name"><span>${esc(s?.brand ?? "Tankstelle")}</span></div><div class="addr">${km(s?.dist)} · ${esc(s?.place ?? "")}, ${esc(s?.street ?? "")}</div></div>
@@ -1110,7 +1110,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
       const fcBand = fcPts.map(([t, v]) => [t, v - fcErr(fcData, t), v + fcErr(fcData, t)]);
       const fc12 = fcPts.filter(([t]) => t > Date.now() && t <= Date.now() + 12 * 36e5);
       const fcBest = fc12.length ? fc12.reduce((a, b) => b[1] < a[1] ? b : a) : null;
-      h += `<div class="sec"><h2>${FUELS[fuel]}</h2><span class="sub">${span >= 6 ? "letzte 7 Tage" : "bisher gesammelt"}</span></div>
+      h += `<div class="sec"><h2>${FUELS[fuel]}</h2><span class="sub">${span >= 6 ? say("die letschde 7 Täg", "letzte 7 Tage") : say("bis etz gsammelt", "bisher gesammelt")}</span></div>
         <div class="stats">
           <div class="card stat"><span class="eyebrow">Ø Preis hier</span><span class="v">${eur(avg)}</span>${pill(avg - regMean, `${ct(avg - regMean)} ggü. Ø`)}</div>
           <div class="card stat"><span class="eyebrow">Tiefstpreis</span><span class="v">${eur(lo)}</span><span class="sub">${esc(fmtTime(new Date(loAt)))}</span></div>
@@ -1123,7 +1123,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
           ${fcBest ? `<div class="facts"><div>${say("Prognose: am billigschde voraussichtlich geg", "Prognose: am günstigsten voraussichtlich gegen")} <b>${hm(new Date(fcBest[0]))} Uhr</b> (≈ ${eurA(fcBest[1])}, ±${fmtNum(fcErr(fcData, fcBest[0]) * 100, 1)} ct).</div></div>` : ""}
           ${tbl(["Tag", "Ø", "Tief", "Hoch"], dailyRows(pts))}</div>`;
       if (Object.keys(days).length > 1)
-        h += `<div class="card chartcard"><div class="t">Preis nach Uhrzeit</div><div class="s">Abweichung vom Tagesmittel dieser Tankstelle</div>
+        h += `<div class="card chartcard"><div class="t">Preis nach Uhrzeit</div><div class="s">${say("Abweichung vom Tagesschnitt dieser Tankstelle", "Abweichung vom Tagesmittel dieser Tankstelle")}</div>
           ${devBars(hourAvg, bestH)}
           <div class="legend"><span><i class="kr" style="background:var(--lo)"></i>günstiger</span><span><i class="kr" style="background:var(--hi)"></i>teurer</span><span>▼ jetzt</span></div>
           ${tbl(["Uhrzeit", "Abweichung"], hours.sort((a, b) => a - b).map((hh) => [`${hh}–${hh + 1} Uhr`, ct(hourAvg[hh])]))}</div>`;
@@ -1131,14 +1131,14 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     // Preisänderungen dieser Tankstelle (Preis nach der Änderung rückwärts ab dem aktuellen Preis)
     const chg = baseCache[view.base.id]?.changes, ev = stationEvents(chg, s.id, fuel);
     if (ev.length) {
-      h += changeCard(changeStats(chg, [s.id], fuel), "Wann ändert diese Tankstelle ihre Preise?", "Anzahl je Uhrzeit, letzte 7 Tage");
+      h += changeCard(changeStats(chg, [s.id], fuel), say("Wann dreht die Tankstell am Preis?", "Wann ändert diese Tankstelle ihre Preise?"), "Anzahl je Uhrzeit, letzte 7 Tage");
       let p = s[fuel];
       const rows = ev.slice().reverse().slice(0, 10).map((e) => {
         const r = `<tr><td>${esc(span(e))}</td><td><span class="arw ${e.d > 0 ? "hi" : "lo"}">${e.d > 0 ? "▲" : "▼"}</span> ${ct(e.d)}</td><td>${p != null ? eur(p) : ""}</td></tr>`;
         if (p != null) p -= e.d;
         return r;
       }).join("");
-      h += `<div class="sec"><h2>Letzte Preisänderungen</h2><span class="sub">${FUELS[fuel]}</span></div><div class="card"><table class="hours chg">${rows}</table>
+      h += `<div class="sec"><h2>${say("Zletscht am Preis dreht", "Letzte Preisänderungen")}</h2><span class="sub">${FUELS[fuel]}</span></div><div class="card"><table class="hours chg">${rows}</table>
         <div class="small" style="margin-top:8px">Angegeben ist der Zeitraum zwischen zwei Abrufen, in dem der Preis geändert wurde.</div></div>`;
     }
     $("#dstats").innerHTML = h;
@@ -1158,14 +1158,14 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
       }).join("") + `</table>`;
       if (H.overrides?.length) body += `<div class="sub" style="margin-top:10px"><b>Abweichende Zeiten:</b><br>${H.overrides.map(esc).join("<br>")}</div>`;
     }
-    return `<div class="sec"><h2>Öffnungszeiten</h2></div><div class="card">${body}</div>`;
+    return `<div class="sec"><h2>${say("Wann hen se offa?", "Öffnungszeiten")}</h2></div><div class="card">${body}</div>`;
   }
 
   // ---- Wochenreport anzeigen (funktioniert auch bei privatem Repository)
   async function openReport(file) {
     try {
       const html = await fetchData(file, true);
-      $("#repFrame").srcdoc = html;
+      $("#repFrame").srcdoc = SW() ? html : html.replace(/<html\b/, '<html class="hoch"');
       $("#report").classList.add("open");
       try { window.history.pushState({ r: 1 }, ""); } catch {}
     } catch (e) { toast("Report konnte nicht geladen werden: " + e.message, 5000); }

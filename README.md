@@ -11,7 +11,7 @@ Datenquelle: [Tankerkönig-API](https://creativecommons.tankerkoenig.de/) (amtli
 
 - die gerade günstigste Tankstelle, mit Knopf „Route starten“ (Apple Karten)
 - alle Tankstellen nach Preis sortiert, umschaltbar zwischen E5, E10 und Diesel
-- einen Tipp zur besten Tankzeit und ob sich Tanken gerade lohnt – standardmäßig auf Schwäbisch (unter ⚙ „Tipps auf Schwäbisch“ abschaltbar)
+- einen Tipp zur besten Tankzeit und ob sich Tanken gerade lohnt. Tipps, Überschriften und das „Fazit vo dr Woch“ im Wochenreport sind standardmäßig auf Schwäbisch; Zahlen, Diagramme und Hinweise bleiben hochdeutsch (unter ⚙ „Auf Schwäbisch“ abschaltbar)
 - den Preisverlauf der letzten 7 Tage und die Abweichung nach Uhrzeit
 - die Wochenreports
 - den Knopf ↻ für einen **sofortigen Abruf**, und in den Einstellungen „Wochenreport jetzt erstellen“

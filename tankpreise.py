@@ -45,6 +45,8 @@ API_BASE = "https://creativecommons.tankerkoenig.de/json"
 FUELS = ("e5", "e10", "diesel")
 FUEL_NAMES = {"e5": "Super E5", "e10": "Super E10", "diesel": "Diesel"}
 WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+WD_LONG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+WD_SCHW = ["Mendig", "Dienschdig", "Mittwoch", "Donnschdig", "Freidig", "Samschdig", "Sonndig"]
 
 log = logging.getLogger("tankpreise")
 
@@ -661,7 +663,132 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .up{fill:var(--hi)} .down{fill:var(--lo)} .best{fill:var(--lo)}
 .good{color:var(--fg)} .bad{color:var(--fg)}
 .tablewrap{overflow-x:auto}
+.fazit{box-shadow:inset 4px 0 0 #f2b300} .fazit h2{margin-top:0} .fazit ul{margin:0;padding-left:20px} .fazit li{margin:4px 0}
+.fz-hoch{display:none} html.hoch .fz-schw{display:none} html.hoch .fz-hoch{display:block}
 """
+
+
+def _ctn(v):
+    """0.012 -> '1,2 ct' (ohne Vorzeichen)."""
+    return f"{abs(v) * 100:.1f} ct".replace(".", ",")
+
+
+def _und(items, und):
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + f" {und} " + items[-1]
+
+
+def _brezel(e):
+    """Ersparnis in Euro, in Brezeln ausgedrückt."""
+    return ("des langt für a Vesper" if e >= 8 else "des langt für zwoi Butterbrezla ond en Kaffee" if e >= 4
+            else "des isch a Butterbrezel" if e >= 1.8 else "Kleinvieh macht au Mischt")
+
+
+def fazit(res, prev, chg):
+    """Kurzes Wochenfazit in zwei Fassungen: (schwäbisch, hochdeutsch), je eine Liste von Sätzen.
+    Die App zeigt die Fassung passend zum Schalter „Auf Schwäbisch“."""
+    sw, hd = [], []
+    fuels = list(res)
+
+    # Entwicklung gegenüber der Vorwoche, gruppiert nach Richtung
+    moves = {"down": [], "up": [], "same": []}
+    for f in fuels:
+        p = prev.get(f)
+        if p:
+            d = res[f]["mean"] - p["mean"]
+            k = "same" if abs(d) < 0.0005 else "down" if d < 0 else "up"
+            moves[k].append(FUEL_NAMES[f] + ("" if k == "same" else f" ({'−' if d < 0 else '+'}{_ctn(d)})"))
+    if any(moves.values()):
+        ps, ph = [], []
+        for k, ws, wh in (("down", "billiger worda", "günstiger geworden"), ("up", "deirer worda", "teurer geworden"),
+                          ("same", "gleich blieba", "gleich geblieben")):
+            if moves[k]:
+                one = len(moves[k]) == 1
+                ps.append(f"{_und(moves[k], 'ond')} {'isch' if one else 'sind'} {ws}")
+                ph.append(f"{_und(moves[k], 'und')} {'ist' if one else 'sind'} {wh}")
+        sw.append(_satz("Im Vergleich zur Vorwoch", ps))
+        hd.append(_satz("Im Vergleich zur Vorwoche", ph))
+    else:
+        sw.append("Für en Vergleich mit dr Vorwoch hen mr no z'wenig Daten.")
+        hd.append("Für einen Vergleich mit der Vorwoche fehlen noch Daten.")
+
+    timed = [f for f in fuels if len(res[f]["day_avg"]) > 1]
+    if timed:
+        # Günstigste Uhrzeit, Sorten mit gleicher Stunde zusammengefasst
+        by_best = defaultdict(list)
+        for f in timed:
+            by_best[res[f]["best_hour"]].append(FUEL_NAMES[f])
+        worst = {res[f]["worst_hour"] for f in timed}
+        if len(by_best) == 1:
+            bh = next(iter(by_best))
+            ws = f", am deirschde zwischa {next(iter(worst))} ond {next(iter(worst)) + 1} Uhr" if len(worst) == 1 else ""
+            wh = f", am teuersten zwischen {next(iter(worst))} und {next(iter(worst)) + 1} Uhr" if len(worst) == 1 else ""
+            sw.append(f"Am billigschde war's zwischa {bh} ond {bh + 1} Uhr{ws}.")
+            hd.append(f"Am günstigsten war es zwischen {bh} und {bh + 1} Uhr{wh}.")
+        else:
+            sw.append("Am billigschde war's " + ", ".join(
+                f"bei {_und(n, 'ond')} zwischa {h} ond {h + 1} Uhr" for h, n in by_best.items()) + ".")
+            hd.append("Am günstigsten war es " + ", ".join(
+                f"bei {_und(n, 'und')} zwischen {h} und {h + 1} Uhr" for h, n in by_best.items()) + ".")
+
+        # Was die richtige Uhrzeit bei einer Tankfüllung bringt
+        spread = max(res[f]["hour_avg"][res[f]["worst_hour"]] - res[f]["hour_avg"][res[f]["best_hour"]] for f in timed)
+        e = spread * 50
+        if e >= 0.5:
+            eu = f"{e:.2f} €".replace(".", ",")
+            sw.append(f"Wer uff d'Uhr guckt, spart bei 50 Liter bis zu {eu} – {_brezel(e)}.")
+            hd.append(f"Wer auf die Uhrzeit achtet, spart bei 50 Litern bis zu {eu}.")
+
+    # Günstigster Wochentag
+    by_wd = defaultdict(list)
+    for f in fuels:
+        if res[f]["best_wd"] is not None:
+            by_wd[res[f]["best_wd"]].append(FUEL_NAMES[f])
+    if len(by_wd) == 1:
+        w = next(iter(by_wd))
+        sw.append(f"Dr billigschde Dag war dr {WD_SCHW[w]}.")
+        hd.append(f"Günstigster Wochentag war der {WD_LONG[w]}.")
+    elif by_wd:
+        sw.append("Dr billigschde Dag war " + ", ".join(f"bei {_und(n, 'ond')} dr {WD_SCHW[w]}" for w, n in by_wd.items()) + ".")
+        hd.append("Günstigster Wochentag war " + ", ".join(f"bei {_und(n, 'und')} der {WD_LONG[w]}" for w, n in by_wd.items()) + ".")
+
+    # Günstigste Tankstelle im Schnitt
+    by_st = defaultdict(list)
+    for f in fuels:
+        by_st[res[f]["stations"][0]["label"]].append(FUEL_NAMES[f])
+    if len(by_st) == 1:
+        lab = next(iter(by_st))
+        sw.append(f"Im Schnitt am billigschde war {lab}.")
+        hd.append(f"Im Schnitt am günstigsten war {lab}.")
+    else:
+        sw.append("Im Schnitt am billigschde war " + "; ".join(f"bei {_und(n, 'ond')} {l}" for l, n in by_st.items()) + ".")
+        hd.append("Im Schnitt am günstigsten war " + "; ".join(f"bei {_und(n, 'und')} {l}" for l, n in by_st.items()) + ".")
+
+    # Wann die Preise meist erhöht werden
+    c = next((chg[f] for f in fuels if (chg or {}).get(f) and chg[f]["top_up"]), None)
+    if c and c["n"] >= 5:
+        ups = [qlabel(q) for q in sorted(c["top_up"][:2])]
+        sw.append(f"Obacht: Nauf ganget d'Preis meischtens um {_und(ups, 'ond')} Uhr.")
+        hd.append(f"Erhöht wurde meist um {_und(ups, 'und')} Uhr.")
+
+    # Faustregel, wenn das Muster eindeutig ist
+    if timed:
+        bhs = {res[f]["best_hour"] for f in timed}
+        whs = {res[f]["worst_hour"] for f in timed}
+        if all(17 <= h <= 23 for h in bhs) and all(5 <= h <= 10 for h in whs):
+            sw.append("Faustregel: Abends tanka – morgens d'Finger weg vo dr Zapfsäul.")
+            hd.append("Faustregel: abends tanken, morgens lieber nicht.")
+    return sw, hd
+
+
+def _satz(anfang, teile):
+    """'Im Vergleich zur Vorwoche' + ['X ist günstiger geworden', 'Y ist teurer geworden'] ->
+    'Im Vergleich zur Vorwoche ist X günstiger geworden, Y ist teurer geworden.' (Verb an zweiter Stelle)."""
+    first = teile[0]
+    for verb in (" isch ", " sind ", " ist "):
+        if verb in first:
+            subj, rest = first.split(verb, 1)
+            return f"{anfang}{verb}{subj} {rest}" + "".join(", " + t for t in teile[1:]) + "."
+    return f"{anfang}: " + ", ".join(teile) + "."
 
 
 def render_report(res, prev, start, end, base, chg=None):
@@ -678,6 +805,12 @@ def render_report(res, prev, start, end, base, chg=None):
         h.append("<p>Keine Daten im Zeitraum vorhanden.</p></body></html>")
         md.append("Keine Daten im Zeitraum vorhanden.")
         return "".join(h), "\n".join(md)
+
+    fz_sw, fz_hd = fazit(res, prev, chg)
+    for cls, head, items in (("fz-schw", "Fazit vo dr Woch", fz_sw), ("fz-hoch", "Fazit der Woche", fz_hd)):
+        h.append(f"<section class='fazit {cls}'><h2>{head}</h2><ul>"
+                 + "".join(f"<li>{html.escape(x)}</li>" for x in items) + "</ul></section>")
+    md += ["## Fazit vo dr Woch", ""] + [f"- {x}" for x in fz_sw] + [""]
 
     for f, r in res.items():
         name = FUEL_NAMES[f]
