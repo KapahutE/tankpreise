@@ -362,7 +362,11 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
     if (!view?.base) return null;
     const c = baseCache[view.base.id];
     if (!c.history) {
-      try { c.history = await fetchData(`data/${view.base.id}/history.json`); } catch { c.history = { ts: [], stations: {}, prev: {} }; }
+      const [h, ch] = await Promise.all([
+        fetchData(`data/${view.base.id}/history.json`).catch(() => ({ ts: [], stations: {}, prev: {} })),
+        fetchData(`data/${view.base.id}/changes.json`).catch(() => null),
+      ]);
+      c.history = h; c.changes = ch;
     }
     return c.history;
   }
@@ -544,6 +548,42 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
       days: new Set(ts.map((t) => t.toDateString())).size,
     };
   }
+  // Preisänderungen: changes.json enthält je Tankstelle/Sorte [Minuten seit start, Δ in 1/1000 €, …]
+  const qlabel = (q) => { const a = q * 15, b = a + 15, f = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; return `${f(a)}–${f(b)}`; };
+  function stationEvents(chg, id, f) {
+    const arr = chg?.stations?.[id]?.[f] || [], t0 = new Date(chg?.start).getTime(), out = [];
+    for (let i = 0; i < arr.length; i += 2) out.push({ t: new Date(t0 + arr[i] * 60000), d: arr[i + 1] / 1000 });
+    return out;
+  }
+  function changeStats(chg, ids, f) {
+    if (!chg?.stations) return null;
+    const up = Array(24).fill(0), down = Array(24).fill(0), upQ = {}, downQ = {}, ups = [], downs = [];
+    let first = Infinity, last = 0, withData = 0;
+    for (const id of ids) {
+      const ev = stationEvents(chg, id, f);
+      if (ev.length) withData++;
+      for (const { t, d } of ev) {
+        const h = t.getHours(), q = h * 4 + Math.floor(t.getMinutes() / 15);
+        if (d > 0) { up[h]++; upQ[q] = (upQ[q] || 0) + 1; ups.push(d); } else { down[h]++; downQ[q] = (downQ[q] || 0) + 1; downs.push(d); }
+        first = Math.min(first, t.getTime()); last = Math.max(last, t.getTime());
+      }
+    }
+    const n = ups.length + downs.length;
+    if (!n) return null;
+    const top = (o) => Object.keys(o).sort((a, b) => o[b] - o[a]).slice(0, 3).map(Number);
+    const days = Math.max(1, Math.min(7, (last - first) / 864e5));
+    return { up, down, n, topUp: top(upQ), topDown: top(downQ), avgUp: mean(ups), avgDown: mean(downs),
+      perDay: n / Math.max(withData, 1) / days };
+  }
+  function changeCard(c, title) {
+    if (!c || c.n < 5) return "";
+    return `<div class="card"><div class="sub" style="margin-bottom:6px">${title}</div>${upDownChart(c.up, c.down)}
+      <div class="legend"><span><i style="border-color:var(--bad)"></i>Erhöhungen</span><span><i style="border-color:var(--good)"></i>Senkungen</span></div>
+      <div class="sub" style="margin-top:8px">${c.topUp.length ? `<b style="color:var(--bad)">Erhöhungen</b> meist ${c.topUp.map(qlabel).join(", ")} Uhr${c.avgUp ? ` (Ø ${ct(c.avgUp)})` : ""}.<br>` : ""}
+        ${c.topDown.length ? `<b style="color:var(--good)">Senkungen</b> meist ${c.topDown.map(qlabel).join(", ")} Uhr${c.avgDown ? ` (Ø ${ct(c.avgDown)})` : ""}.<br>` : ""}
+        ${c.n} Änderungen beobachtet · Ø ${c.perDay.toFixed(1).replace(".", ",")} pro Tankstelle und Tag</div></div>`;
+  }
+
   const labelOf = (id) => { const s = byId(id); return s ? `${s.brand}, ${s.place}` : "Tankstelle"; };
 
   // ---- Darstellung
@@ -654,6 +694,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
       </div>
       <div class="card"><div class="sub" style="margin-bottom:6px">Durchschnittspreis im Verlauf</div>${lineChart(sum.series)}</div>`;
     if (sum.days > 1) h += `<div class="card"><div class="sub" style="margin-bottom:6px">Abweichung nach Uhrzeit (grün = günstiger)</div>${hourChart(sum.hourAvg, sum.bestHour)}</div>`;
+    h += changeCard(changeStats(baseCache[view.base.id]?.changes, view.stations.map((s) => s.id), fuel), "Wann ändern sich die Preise? (Anzahl je Uhrzeit)");
     h += `<h2>Günstigste im Schnitt</h2><div class="list">` + sum.ranking.slice(0, 5).map((r, i) => {
       const s = byId(r.id);
       return `<button class="item" data-detail="${esc(r.id)}"><div class="info">
@@ -755,6 +796,18 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
       if (Object.keys(days).length > 1)
         h += `<div class="card"><div class="sub" style="margin-bottom:6px">Abweichung nach Uhrzeit an dieser Tankstelle</div>${hourChart(hourAvg, bestH)}</div>`;
     }
+    // Preisänderungen dieser Tankstelle (Preis nach der Änderung rückwärts ab dem aktuellen Preis)
+    const chg = baseCache[view.base.id]?.changes, ev = stationEvents(chg, s.id, fuel);
+    if (ev.length) {
+      h += changeCard(changeStats(chg, [s.id], fuel), "Wann ändert diese Tankstelle ihre Preise?");
+      let p = s[fuel];
+      const rows = ev.slice().reverse().slice(0, 10).map((e) => {
+        const r = `<tr><td>${fmtTime(e.t)}</td><td style="color:var(${e.d > 0 ? "--bad" : "--good"})">${ct(e.d)}</td><td>${p != null ? eur(p) : ""}</td></tr>`;
+        if (p != null) p -= e.d;
+        return r;
+      }).join("");
+      h += `<h2>Letzte Preisänderungen <span class="sub">${FUELS[fuel]}</span></h2><div class="card"><table class="hours">${rows}</table></div>`;
+    }
     $("#dstats").innerHTML = h;
   }
 
@@ -819,6 +872,20 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
     const path = (p) => p.map(([t, v]) => `${X(t).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
     return `<svg class="chart" viewBox="0 0 ${W} ${H}">${g}${ref && ref.length > 1 ? `<polyline class="ln2" points="${path(ref)}"/>` : ""}<polyline class="ln" points="${path(pts)}"/></svg>`;
   }
+  function upDownChart(up, down) {
+    const W = 340, H = 130, L = 6, R = 6, T = 8, B = 18;
+    const m = Math.max(1, ...up, ...down);
+    const zero = T + (H - T - B) / 2, sc = (H - T - B) / 2 / m, bw = (W - L - R) / 24;
+    let g = `<line class="gl" x1="${L}" x2="${W - R}" y1="${zero}" y2="${zero}"/>`;
+    for (let i = 0; i < 24; i++) {
+      const x = L + i * bw + bw * 0.15;
+      if (up[i]) g += `<rect class="bar-up" x="${x}" y="${zero - up[i] * sc}" width="${bw * 0.7}" height="${up[i] * sc}" rx="1.5"/>`;
+      if (down[i]) g += `<rect class="bar-down" x="${x}" y="${zero}" width="${bw * 0.7}" height="${down[i] * sc}" rx="1.5"/>`;
+      if (i % 3 === 0) g += `<text x="${x + bw * 0.35}" y="${H - 4}" text-anchor="middle">${i}</text>`;
+    }
+    return `<svg class="chart" viewBox="0 0 ${W} ${H}">${g}</svg>`;
+  }
+
   function hourChart(hourAvg, bestHour) {
     const W = 340, H = 130, L = 6, R = 6, T = 8, B = 18;
     const vals = Array.from({ length: 24 }, (_, i) => hourAvg[i] ?? hourAvg[String(i)] ?? null);

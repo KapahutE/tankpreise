@@ -99,7 +99,7 @@ CSV_FIELDS = ["ts", "station_id", "e5", "e10", "diesel", "is_open"]
 
 
 class Store:
-    """Monatliche CSV-Dateien data/prices-YYYY-MM.csv plus data/stations.json."""
+    """Preisdaten unter data/: Änderungsprotokoll, Abrufzeitpunkte, Stammdaten, Öffnungszeiten."""
 
     def __init__(self, cfg):
         self.dir = resolve(cfg["storage"]["data"])
@@ -125,14 +125,24 @@ class Store:
         except FileNotFoundError:
             return {}
 
-    def month_file(self, d):
-        return os.path.join(self.dir, f"prices-{d:%Y-%m}.csv")
+    # Gespeichert wird ein Änderungsprotokoll: changes-YYYY-MM.csv enthält eine Zeile nur,
+    # wenn sich bei einer Tankstelle Preis oder Öffnungsstatus geändert hat (erste Zeilen des
+    # Monats: kompletter Stand). polls-YYYY-MM.txt listet die Zeitpunkte aller Abrufe.
+    # Ältere prices-YYYY-MM.csv (vollständige Stände je Abruf) werden weiterhin gelesen.
+
+    def _state(self):
+        try:
+            with open(os.path.join(self.dir, "state.json"), encoding="utf-8") as fh:
+                return json.load(fh)
+        except FileNotFoundError:
+            return {"month": None, "s": {}}
 
     def save_snapshot(self, ts, stations):
-        """Speichert eine Liste von Tankerkönig-Station-Dicts zum Zeitpunkt ts."""
+        """Speichert einen Abruf (Liste von Tankerkönig-Station-Dicts) zum Zeitpunkt ts."""
         ts_s = ts.strftime("%Y-%m-%dT%H:%M:00")
+        month = f"{ts:%Y-%m}"
         known = self.stations()
-        rows = []
+        cur = {}
         for s in stations:
             known[s["id"]] = {
                 "name": s.get("name"), "brand": s.get("brand"), "street": s.get("street"),
@@ -141,36 +151,93 @@ class Store:
                 "dist_km": s.get("dist"), "last_seen": ts_s,
             }
             p = {f: _price(s.get(f)) for f in FUELS}
-            # Geschlossene Stationen liefern i.d.R. keine Preise -> trotzdem Status speichern
-            rows.append([ts_s, s["id"]] + ["" if p[f] is None else f"{p[f]:.3f}" for f in FUELS]
-                        + [1 if s.get("isOpen") else 0])
-        path = self.month_file(ts)
-        new = not os.path.exists(path)
+            cur[s["id"]] = ["" if p[f] is None else f"{p[f]:.3f}" for f in FUELS] + [1 if s.get("isOpen") else 0]
+        state = self._state()
+        for sid in state["s"]:          # nicht mehr gemeldet -> als geschlossen vermerken
+            cur.setdefault(sid, ["", "", "", 0])
+        path = os.path.join(self.dir, f"changes-{month}.csv")
+        full = state["month"] != month or not os.path.exists(path)
+        rows = [[ts_s, sid] + v for sid, v in sorted(cur.items()) if full or state["s"].get(sid) != v]
         with open(path, "a", newline="", encoding="utf-8") as fh:
             w = csv.writer(fh)
-            if new:
+            if full and fh.tell() == 0:
                 w.writerow(CSV_FIELDS)
             w.writerows(rows)
+        with open(os.path.join(self.dir, f"polls-{month}.txt"), "a", encoding="utf-8") as fh:
+            fh.write(ts_s + "\n")
+        with open(os.path.join(self.dir, "state.json"), "w", encoding="utf-8") as fh:
+            json.dump({"month": month, "ts": ts_s, "s": cur}, fh, separators=(",", ":"))
         with open(self.stations_file, "w", encoding="utf-8") as fh:
             json.dump(known, fh, ensure_ascii=False, indent=1, sort_keys=True)
         return len(rows)
 
+    def _months(self, start, end):
+        months = set()
+        for path in glob.glob(os.path.join(self.dir, "*-[0-9][0-9][0-9][0-9]-[0-9][0-9].*")):
+            m = re.search(r"(\d{4}-\d{2})\.(csv|txt)$", path)
+            if m and not (start and m.group(1) < f"{start:%Y-%m}" or end and m.group(1) > f"{end:%Y-%m}"):
+                months.add(m.group(1))
+        return sorted(months)
+
+    def _events(self, start, end):
+        """Alle gespeicherten Stände (Ereignisse) und Abrufzeitpunkte der betroffenen Monate."""
+        events, polls = [], set()
+        for month in self._months(start, end):
+            for name in (f"prices-{month}.csv", f"changes-{month}.csv"):
+                path = os.path.join(self.dir, name)
+                if not os.path.exists(path):
+                    continue
+                legacy = name.startswith("prices")
+                with open(path, newline="", encoding="utf-8") as fh:
+                    for r in csv.reader(fh):
+                        if r[0] == "ts":
+                            continue
+                        ts = datetime.fromisoformat(r[0])
+                        events.append((ts, r[1], tuple(float(x) if x else None for x in r[2:5]), r[5] == "1"))
+                        if legacy:
+                            polls.add(ts)
+            pp = os.path.join(self.dir, f"polls-{month}.txt")
+            if os.path.exists(pp):
+                with open(pp, encoding="utf-8") as fh:
+                    polls.update(datetime.fromisoformat(x.strip()) for x in fh if x.strip())
+        events.sort(key=lambda e: e[0])
+        return events, sorted(polls)
+
     def rows(self, start=None, end=None):
-        """Liefert alle Preiszeilen im Zeitraum [start, end) als Dicts."""
-        out = []
-        for path in sorted(glob.glob(os.path.join(self.dir, "prices-*.csv"))):
-            month = os.path.basename(path)[7:14]
-            if start and month < f"{start:%Y-%m}" or end and month > f"{end:%Y-%m}":
+        """Stündliche Stände im Zeitraum [start, end): je Stunde der erste Abruf, für jede
+        Tankstelle der zu diesem Zeitpunkt gültige Preis."""
+        events, polls = self._events(start, end)
+        sample, seen = [], set()
+        for t in polls:
+            hour = t.replace(minute=0, second=0)
+            if hour not in seen:
+                seen.add(hour)
+                sample.append(t)
+        out, state, i = [], {}, 0
+        for t in sample:
+            while i < len(events) and events[i][0] <= t:
+                state[events[i][1]] = events[i][2:]
+                i += 1
+            if (start and t < start) or (end and t >= end):
                 continue
-            with open(path, newline="", encoding="utf-8") as fh:
-                for r in csv.DictReader(fh):
-                    ts = datetime.fromisoformat(r["ts"])
-                    if (start and ts < start) or (end and ts >= end):
-                        continue
-                    row = {"ts": ts, "sid": r["station_id"], "is_open": r["is_open"] == "1"}
-                    for f in FUELS:
-                        row[f] = float(r[f]) if r[f] else None
-                    out.append(row)
+            for sid, (prices, is_open) in state.items():
+                row = {"ts": t, "sid": sid, "is_open": is_open}
+                row.update(zip(FUELS, prices))
+                out.append(row)
+        return out
+
+    def changes(self, start=None, end=None):
+        """Preisänderungen (ts, sid, Sorte, alt, neu) im Zeitraum, nur zwischen zwei Abrufen,
+        bei denen die Tankstelle geöffnet war."""
+        events, _ = self._events(start, end)
+        state, out = {}, []
+        for ts, sid, prices, is_open in events:
+            old = state.get(sid)
+            if old and old[1] and is_open and not (start and ts < start or end and ts >= end):
+                for f, a, b in zip(FUELS, old[0], prices):
+                    if a is not None and b is not None and abs(a - b) > 1e-9:
+                        out.append((ts, sid, f, a, b))
+            state[sid] = (prices, is_open)
         return out
 
 
@@ -261,7 +328,7 @@ def fetch(cfg):
 # --------------------------------------------------------------------------- Öffnungszeiten
 
 HOURS_MAX_AGE = timedelta(days=7)   # Öffnungszeiten ändern sich selten
-HOURS_PER_RUN = 100                 # Obergrenze an Detail-Abfragen pro Lauf
+HOURS_PER_RUN = 12                  # Obergrenze an Detail-Abfragen pro Lauf
 
 _DAY_TOKENS = [
     ("montag", 0), ("dienstag", 1), ("mittwoch", 2), ("donnerstag", 3), ("freitag", 4),
@@ -326,13 +393,15 @@ def update_opening_times(cfg, store, station_ids, now=None):
     done = 0
     for sid in due[:HOURS_PER_RUN]:
         try:
-            st = _api_get("detail.php", {"id": sid, "apikey": _api_key(cfg)}, retries=2).get("station") or {}
+            st = _api_get("detail.php", {"id": sid, "apikey": _api_key(cfg)}, retries=1).get("station") or {}
         except Exception as e:
-            log.warning("Öffnungszeiten für %s nicht abrufbar: %s", sid, e)
-            continue
+            # Kein zweiter Versuch und Abbruch für diesen Lauf: lieber später erneut,
+            # als Tankerkönig mit Anfragen zu überhäufen
+            log.warning("Öffnungszeiten: Abbruch nach Fehler bei %s: %s", sid, e)
+            break
         hours[sid] = {"fetched": now.isoformat(timespec="minutes"), **normalize_hours(st)}
         done += 1
-        time.sleep(0.5)
+        time.sleep(1)
     if done:
         store.save_hours(hours)
         log.info("Öffnungszeiten für %d Tankstellen aktualisiert.", done)
@@ -432,6 +501,59 @@ def analyse(rows):
     return res
 
 
+def analyse_changes(changes, days):
+    """Preisänderungen je Sorte: Anzahl Erhöhungen/Senkungen je Stunde und häufigste
+    Viertelstunden für Erhöhungen bzw. Senkungen."""
+    res = {}
+    for f in FUELS:
+        ev = [(ts, b - a) for ts, _, ff, a, b in changes if ff == f]
+        if not ev:
+            continue
+        up_h, down_h = [0] * 24, [0] * 24
+        up_q, down_q = defaultdict(int), defaultdict(int)
+        for ts, d in ev:
+            q = ts.hour * 4 + ts.minute // 15
+            if d > 0:
+                up_h[ts.hour] += 1; up_q[q] += 1
+            else:
+                down_h[ts.hour] += 1; down_q[q] += 1
+        stations = len({sid for _, sid, ff, _, _ in changes if ff == f})
+        res[f] = {"up_h": up_h, "down_h": down_h, "n": len(ev),
+                  "per_day": len(ev) / max(stations, 1) / max(days, 1),
+                  "top_up": sorted(up_q, key=up_q.get, reverse=True)[:3],
+                  "top_down": sorted(down_q, key=down_q.get, reverse=True)[:3],
+                  "avg_up": statistics.mean([d for _, d in ev if d > 0] or [0]),
+                  "avg_down": statistics.mean([d for _, d in ev if d < 0] or [0])}
+    return res
+
+
+def qlabel(q):
+    """Viertelstunde des Tages -> '12:00–12:15'."""
+    a = q * 15
+    return f"{a // 60:02d}:{a % 60:02d}–{(a + 15) // 60 % 24:02d}:{(a + 15) % 60:02d}"
+
+
+def svg_updown(up, down, width=720, height=200):
+    """Erhöhungen (rot, nach oben) und Senkungen (grün, nach unten) je Stunde."""
+    pad_l, pad_r, pad_t, pad_b = 40, 12, 12, 24
+    m = max(up + down) or 1
+    zero = pad_t + (height - pad_t - pad_b) / 2
+    sc = (height - pad_t - pad_b) / 2 / m
+    bw = (width - pad_l - pad_r) / 24
+    parts = [f'<line x1="{pad_l}" x2="{width - pad_r}" y1="{zero}" y2="{zero}" class="axis"/>',
+             f'<text x="{pad_l - 6}" y="{pad_t + 8}" text-anchor="end">↑{m}</text>',
+             f'<text x="{pad_l - 6}" y="{height - pad_b}" text-anchor="end">↓{m}</text>']
+    for h in range(24):
+        x = pad_l + h * bw + bw * 0.15
+        if up[h]:
+            parts.append(f'<rect x="{x:.1f}" y="{zero - up[h] * sc:.1f}" width="{bw * .7:.1f}" height="{up[h] * sc:.1f}" class="up"><title>{h} Uhr: {up[h]} Erhöhungen</title></rect>')
+        if down[h]:
+            parts.append(f'<rect x="{x:.1f}" y="{zero:.1f}" width="{bw * .7:.1f}" height="{down[h] * sc:.1f}" class="down"><title>{h} Uhr: {down[h]} Senkungen</title></rect>')
+        if h % 3 == 0:
+            parts.append(f'<text x="{x + bw * .35:.1f}" y="{height - 6}" text-anchor="middle">{h}</text>')
+    return f'<svg viewBox="0 0 {width} {height}" class="chart">{"".join(parts)}</svg>'
+
+
 # --------------------------------------------------------------------------- Report-Ausgabe
 
 def eur(v, sign=False):
@@ -517,7 +639,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 """
 
 
-def render_report(res, prev, start, end, base):
+def render_report(res, prev, start, end, base, chg=None):
     title = f"Tankpreise {base['name']} ({base['place']}) – KW {start.isocalendar()[1]}/{start.year}"
     period = f"{start:%d.%m.%Y} – {(end - timedelta(seconds=1)):%d.%m.%Y}"
     area = f"Umkreis {base['radius_km']:g} km um {base['place']}"
@@ -562,6 +684,16 @@ def render_report(res, prev, start, end, base):
             wds = sorted(r["wd_avg"])
             h.append("<h3>Abweichung nach Wochentag</h3>"
                      + svg_bars([r["wd_avg"][w] for w in wds], [WEEKDAYS[w] for w in wds], height=160))
+        c, chg_md = (chg or {}).get(f), None
+        if c:
+            ups = ", ".join(qlabel(q) for q in c["top_up"]) or "–"
+            downs = ", ".join(qlabel(q) for q in c["top_down"]) or "–"
+            h.append(f"<h3>Wann ändern sich die Preise?</h3>{svg_updown(c['up_h'], c['down_h'])}"
+                     f"<p class='sub'>{c['n']} Änderungen beobachtet (Ø {c['per_day']:.1f} je Tankstelle und Tag). "
+                     f"Erhöhungen meist {ups} Uhr (Ø {ct(c['avg_up'] / 1000)}), "
+                     f"Senkungen meist {downs} Uhr (Ø {ct(c['avg_down'] / 1000)}).</p>")
+            chg_md = (f"- Preiserhöhungen meist: **{ups} Uhr**, Senkungen meist: {downs} Uhr "
+                      f"({c['n']} Änderungen, Ø {c['per_day']:.1f} je Tankstelle und Tag)")
         h.append("<h3>Tankstellen-Ranking (nach Ø Preis)</h3><div class='tablewrap'><table><tr><th>#</th>"
                  "<th>Tankstelle</th><th class='n'>km</th><th class='n'>Ø</th><th class='n'>Min</th>"
                  "<th class='n'>Max</th><th class='n'>Änderungen*</th></tr>")
@@ -586,6 +718,8 @@ def render_report(res, prev, start, end, base):
             md.append(f"- Günstigster Wochentag: {WEEKDAYS[r['best_wd']]} ({ct(r['wd_avg'][r['best_wd']])})")
         md.append(f"- Günstigste Tankstelle im Schnitt: **{best_st['label']}** ({eur(best_st['mean'])}, "
                   f"{(best_st['dist'] or 0):.1f} km)")
+        if chg_md:
+            md.append(chg_md)
         md += ["", "| # | Tankstelle | km | Ø | Min | Max |", "|---|---|---:|---:|---:|---:|"]
         for i, s in enumerate(r["stations"][:10], 1):
             md.append(f"| {i} | {s['label']} | {(s['dist'] or 0):.1f} | {eur(s['mean'])} | "
@@ -608,7 +742,11 @@ def cmd_report(cfg, days=7, end=None):
     for b in load_bases(cfg):
         res = analyse(load_week(store, start, end, b))
         prev = analyse(load_week(store, start - timedelta(days=days), start, b))
-        html_s, md_s = render_report(res, prev, start, end, b)
+        st = store.stations()
+        inside = {sid for sid, info in st.items()
+                  if (d := base_dist(b, info)) is not None and d <= b["radius_km"] + 0.05}
+        chg = analyse_changes([c for c in store.changes(start, end) if c[1] in inside], days)
+        html_s, md_s = render_report(res, prev, start, end, b, chg)
         out_dir = os.path.join(resolve(cfg["storage"]["docs"]), "reports", b["id"])
         os.makedirs(out_dir, exist_ok=True)
         path = os.path.join(out_dir, f"report_{y}-KW{w:02d}")
@@ -639,8 +777,17 @@ def cmd_export(cfg):
     bases = load_bases(cfg)
 
     rows14 = store.rows(now - timedelta(days=14))
-    last_ts = max((r["ts"] for r in rows14), default=None)
-    week_start = now - timedelta(days=7)
+    week_start = (now - timedelta(days=7)).replace(second=0, microsecond=0)
+    changes7 = store.changes(week_start)
+    # Aktueller Stand: letzter Abruf aus state.json (bei Altdaten: letzter gespeicherter Stand)
+    state = store._state()
+    if state.get("ts"):
+        last_ts = datetime.fromisoformat(state["ts"])
+        current = {sid: {**{f: float(v[i]) if v[i] else None for i, f in enumerate(FUELS)}, "is_open": v[3] == 1}
+                   for sid, v in state["s"].items()}
+    else:
+        last_ts = max((r["ts"] for r in rows14), default=None)
+        current = {r["sid"]: r for r in rows14 if r["ts"] == last_ts}
     times = sorted({r["ts"] for r in rows14 if r["ts"] >= week_start})
     idx = {t: i for i, t in enumerate(times)}
 
@@ -653,16 +800,15 @@ def cmd_export(cfg):
 
         # Aktuelle Preise: letzter Abruf
         latest = {"updated": last_ts.isoformat() if last_ts else None, "stations": []}
-        for r in rows14:
-            if r["ts"] != last_ts or r["sid"] not in inside:
+        for sid, r in current.items():
+            if sid not in inside:
                 continue
-            info = st[r["sid"]]
+            info = st[sid]
             latest["stations"].append({
-                "id": r["sid"], **nice_station(info),
+                "id": sid, **nice_station(info),
                 "lat": info.get("lat"), "lng": info.get("lng"),
                 "open": r["is_open"], **{f: r[f] for f in FUELS},
-                "hours": {k: v for k, v in hours[r["sid"]].items() if k != "fetched"}
-                if r["sid"] in hours else None,
+                "hours": {k: v for k, v in hours[sid].items() if k != "fetched"} if sid in hours else None,
             })
 
         # Verlauf der letzten 7 Tage je Tankstelle (Preise in 1/1000 €) + Ø der Vorwoche
@@ -688,6 +834,14 @@ def cmd_export(cfg):
                      for sid, p in prev_sum.items()},
         }
 
+        # Preisänderungen der letzten 7 Tage je Tankstelle und Sorte:
+        # flache Liste [Minuten seit Fensterbeginn, Änderung in 1/1000 €, ...]
+        chg = {"start": week_start.isoformat(timespec="minutes"), "stations": {}}
+        for ts, sid, f, a, bb in changes7:
+            if sid in inside:
+                lst = chg["stations"].setdefault(sid, {}).setdefault(f, [])
+                lst += [int((ts - week_start).total_seconds() // 60), _cents(bb) - _cents(a)]
+
         reports = []
         for path in sorted(glob.glob(os.path.join(docs, "reports", b["id"], "report_*.html")), reverse=True):
             name = os.path.basename(path)
@@ -695,7 +849,7 @@ def cmd_export(cfg):
                             "title": name[7:-5].replace("-KW", " · KW ")})
 
         for fname, obj in (("latest.json", latest), ("history.json", history),
-                           ("reports.json", reports)):
+                           ("changes.json", chg), ("reports.json", reports)):
             with open(os.path.join(out_dir, fname), "w", encoding="utf-8") as fh:
                 json.dump(obj, fh, ensure_ascii=False, separators=(",", ":"))
         index.append({**b, "stations": len(latest["stations"]), "updated": latest["updated"]})
@@ -766,11 +920,12 @@ def cmd_demo(cfg, weeks=2):
             st = dict(s)
             st["isOpen"] = 6 <= h <= 21 or s["brand"] in ("Aral", "Shell")
             for f in FUELS:
-                p = base[f] + daily + trend + s["off"] + rnd.choice([0, 0, 0.01, -0.01])
+                noise = random.Random(f"{s['id']}{t:%Y%m%d%H}").choice([0, 0, 0.01, -0.01])
+                p = base[f] + daily + trend + s["off"] + noise
                 st[f] = round(p, 2) + 0.009 if st["isOpen"] else None
             snap.append(st)
         store.save_snapshot(t, snap)
-        t += timedelta(hours=1)
+        t += timedelta(minutes=15)
     log.info("Demo-Daten für %d Wochen erzeugt.", weeks)
 
 
