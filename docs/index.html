@@ -291,6 +291,8 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
 
   // ---- Datenquelle: dieselbe Webseite (öffentliches Repo) oder privates Repo über die GitHub-API
   function defaultRepo() {
+    const fixed = document.querySelector('meta[name="data-repo"]')?.content;
+    if (fixed) return fixed;
     const m = location.hostname.match(/^([^.]+)\.github\.io$/);
     const seg = location.pathname.split("/").filter(Boolean)[0];
     return m && seg ? `${m[1]}/${seg.replace(/-app$/, "")}` : "";
