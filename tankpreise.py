@@ -398,6 +398,9 @@ def update_opening_times(cfg, store, station_ids, now=None):
             # Kein zweiter Versuch und Abbruch für diesen Lauf: lieber später erneut,
             # als Tankerkönig mit Anfragen zu überhäufen
             log.warning("Öffnungszeiten: Abbruch nach Fehler bei %s: %s", sid, e)
+            with open(os.path.join(store.dir, "api_status.json"), "w", encoding="utf-8") as fh:
+                json.dump({"ts": now.isoformat(timespec="minutes"), "detail_error": str(e)[:300],
+                           "station": sid, "fetched_this_run": done}, fh, ensure_ascii=False, indent=1)
             break
         hours[sid] = {"fetched": now.isoformat(timespec="minutes"), **normalize_hours(st)}
         done += 1
