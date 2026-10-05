@@ -122,6 +122,7 @@ button{font:inherit;border:0;cursor:pointer;color:inherit;background:none}
 .tiphead b{font-size:17px}
 .verdict{margin:10px 0 0;font-size:14px;color:var(--muted)}
 .verdict b{color:var(--fg)}
+.quip{margin:12px 0 0;font-size:14px;color:var(--muted)}
 
 /* Liste */
 .chips{display:flex;gap:8px;margin:0 0 10px;flex-wrap:wrap}
@@ -270,6 +271,8 @@ dialog h3{margin:0 0 12px;font-size:21px;letter-spacing:-.02em}
 label{display:block;font-size:14px;color:var(--muted);margin:14px 0 4px}
 input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11px;border:1px solid var(--line);background:var(--card);color:var(--fg)}
 .actions{display:flex;gap:8px;margin-top:18px}
+label.check{display:flex;align-items:center;gap:10px;color:var(--fg);font-size:15px;margin:16px 0 0}
+label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--acc)}
 .actions .btn{flex:1}
 .opt{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;background:var(--card);border-bottom:1px solid var(--line);text-align:left}
 .opt:first-child{border-radius:14px 14px 0 0}.opt:last-child{border-radius:0 0 14px 14px;border-bottom:0}
@@ -386,6 +389,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
     <input id="inToken" type="password" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false">
     <label for="inTk">Tankerkönig-Schlüssel <span class="small">(optional, für Live-Preise außerhalb der Bases)</span></label>
     <input id="inTk" type="password" placeholder="xxxxxxxx-xxxx-…" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label class="check"><input id="inDialect" type="checkbox"> Tipps auf Schwäbisch</label>
     <div class="actions">
       <button class="btn secondary" value="cancel">Abbrechen</button>
       <button class="btn" value="save">Speichern</button>
@@ -406,6 +410,16 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
 (() => {
   const FUELS = { e5: "Super E5", e10: "Super E10", diesel: "Diesel" };
   const WD = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+  // Tipps auf Schwäbisch (abschaltbar unter ⚙): say(schwäbisch, hochdeutsch)
+  const SW = () => store.get("dialect", "1") === "1";
+  const say = (schw, hoch) => SW() ? schw : hoch;
+  const WD_LONG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
+  const WD_SCHW = ["Mendig", "Dienschdig", "Mittwoch", "Donnschdig", "Freidig", "Samschdig", "Sonndig"];
+  // Ersparnis in Brezeln umgerechnet – so versteht's jeder
+  const brezel = (e) => e >= 8 ? "Des langt für a Vesper – Brezel, Wurscht ond a Schorle."
+    : e >= 4 ? "Des langt für zwoi Butterbrezla ond en Kaffee."
+    : e >= 1.8 ? "Des isch a Butterbrezel – immerhin!"
+    : "Kleinvieh macht au Mischt.";
   const TK = "https://creativecommons.tankerkoenig.de/json";
   const store = {
     get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
@@ -823,10 +837,11 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
     if (!fc) { el.innerHTML = ""; return; }
     if (!fc.ok) {
       const q = fc.quality;
-      const why = fc.available_from && !q ? `Genug Daten voraussichtlich ab ${dtLabel(fc.available_from)}.`
-        : q ? `Bisher noch nicht genauer als die Annahme „Preis bleibt gleich“ (Ø ${fmtNum(q.mae_avg, 1)} ct vs. ${fmtNum(q.naive_avg, 1)} ct daneben). Sie wird freigeschaltet, sobald sie verlässlich besser ist.`
-        : "Es werden noch Daten gesammelt.";
-      el.innerHTML = `<section class="card"><div class="tiphead"><div class="ic">${SPARK}</div><div><b>Preisprognose lernt noch</b>
+      const why = fc.available_from && !q ? say(`Mir sammlet no fleißig Daten – voraussichtlich ab ${dtLabel(fc.available_from)} woiß se Bscheid.`, `Genug Daten voraussichtlich ab ${dtLabel(fc.available_from)}.`)
+        : q ? say(`Bis etz isch se no net gscheiter als „dr Preis bleibt, wie er isch“ (Ø ${fmtNum(q.mae_avg, 1)} ct gega ${fmtNum(q.naive_avg, 1)} ct dernebe). Erscht wenn se's zuverlässig besser ka, wird se freigschaltet – mir verlassat ons net auf a Gschwätz.`,
+            `Bisher noch nicht genauer als die Annahme „Preis bleibt gleich“ (Ø ${fmtNum(q.mae_avg, 1)} ct vs. ${fmtNum(q.naive_avg, 1)} ct daneben). Sie wird freigeschaltet, sobald sie verlässlich besser ist.`)
+        : say("Mir sammlet no Daten.", "Es werden noch Daten gesammelt.");
+      el.innerHTML = `<section class="card"><div class="tiphead"><div class="ic">${SPARK}</div><div><b>${say("D'Preisprognose lernt no", "Preisprognose lernt noch")}</b>
         <div class="sub">${why}</div></div></div></section>`;
       return;
     }
@@ -846,16 +861,21 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
     const line = [...(cur != null ? [[now, cur]] : []), ...pts.map(([t, o]) => [t, o.v])];
     const band = pts.map(([t, o]) => [t, o.v - fcErr(fc, t), o.v + fcErr(fc, t)]);
     el.innerHTML = `<section class="card">
-      <div class="tiphead"><div class="ic">${SPARK}</div><div><b>${cur == null ? "Preisprognose" : wait ? "Warten lohnt sich voraussichtlich" : "Jetzt tanken ist in Ordnung"}</b>
+      <div class="tiphead"><div class="ic">${SPARK}</div><div><b>${cur == null ? say("Grad hot älles zu", "Preisprognose") : wait ? say("Warta lohnt sich!", "Warten lohnt sich voraussichtlich") : say("Etz tanka passt scho", "Jetzt tanken ist in Ordnung")}</b>
         <div class="sub">${cur == null
-          ? `Gerade hat keine Tankstelle im Umkreis geöffnet. Am günstigsten voraussichtlich gegen ${hm(new Date(bt))} Uhr: ≈ ${eurA(bo.v)} bei ${esc(bo.s.brand)}, ${esc(bo.s.place)}.`
+          ? say(`Grad hot koi Tankstell im Umkreis offa. Am billigschde wird's voraussichtlich geg ${hm(new Date(bt))} Uhr: ≈ ${eurA(bo.v)} bei ${esc(bo.s.brand)}, ${esc(bo.s.place)}.`,
+            `Gerade hat keine Tankstelle im Umkreis geöffnet. Am günstigsten voraussichtlich gegen ${hm(new Date(bt))} Uhr: ≈ ${eurA(bo.v)} bei ${esc(bo.s.brand)}, ${esc(bo.s.place)}.`)
           : wait
-          ? `Gegen ${hm(new Date(bt))} Uhr ca. <b>${ct(-gain)}</b> günstiger: ≈ ${eurA(bo.v)} bei ${esc(bo.s.brand)}, ${esc(bo.s.place)}.`
-          : `In den nächsten 12 Stunden wird es voraussichtlich nicht deutlich günstiger als jetzt (${eur(cur)}).`}</div></div></div>
+          ? say(`Geg ${hm(new Date(bt))} Uhr wird's voraussichtlich <b>${fmtNum(gain * 100, 1)} ct billiger</b>: ≈ ${eurA(bo.v)} bei ${esc(bo.s.brand)}, ${esc(bo.s.place)}. Also bloß net hudla!`,
+            `Gegen ${hm(new Date(bt))} Uhr ca. <b>${fmtNum(gain * 100, 1)} ct günstiger</b>: ≈ ${eurA(bo.v)} bei ${esc(bo.s.brand)}, ${esc(bo.s.place)}.`)
+          : say(`In de nächschde 12 Stond wird's voraussichtlich net arg billiger als etz (${eur(cur)}). Also tank ruhig, bevor's wieder aufschlägt.`,
+            `In den nächsten 12 Stunden wird es voraussichtlich nicht deutlich günstiger als jetzt (${eur(cur)}).`)}</div></div></div>
       ${lineChart([{ name: "Günstigster Preis (Prognose)", cls: "proj", pts: line, band }], { mark: [bt, bo.v], markLabel: `≈ ${eurA(bo.v)}` })}
       <div class="legend"><span><i class="k proj"></i>günstigster Preis im Umkreis, Prognose</span><span><i class="kr" style="background:var(--lo);opacity:.25"></i>übliche Abweichung</span></div>
       ${wait || cur == null ? `<div class="row"><button class="btn secondary" data-detail="${esc(bo.s.id)}">Zur Tankstelle</button></div>` : ""}
-      <p class="small" style="margin:10px 0 0">Lernendes Modell aus ${fmtNum(fc.days, 0)} Tagen Daten. Im Rückblick-Test im Schnitt ±${fmtNum(fc.quality.mae_avg, 1)} ct daneben – die Annahme „Preis bleibt gleich“ ±${fmtNum(fc.quality.naive_avg, 1)} ct. Keine Garantie.</p>
+      <p class="small" style="margin:10px 0 0">${say(
+        `Lernendes Modell aus ${fmtNum(fc.days, 0)} Däg Daten. Im Rückblick-Test im Schnitt ±${fmtNum(fc.quality.mae_avg, 1)} ct dernebe – „dr Preis bleibt, wie er isch“ ±${fmtNum(fc.quality.naive_avg, 1)} ct. Ohne Gewähr, gell.`,
+        `Lernendes Modell aus ${fmtNum(fc.days, 0)} Tagen Daten. Im Rückblick-Test im Schnitt ±${fmtNum(fc.quality.mae_avg, 1)} ct daneben – die Annahme „Preis bleibt gleich“ ±${fmtNum(fc.quality.naive_avg, 1)} ct. Keine Garantie.`)}</p>
     </section>`;
   }
 
@@ -897,22 +917,23 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
     if (best) {
       const stt = state(best), save = avgNow - best[fuel];
       h += `<section class="card hero">
-        <span class="eyebrow">Günstigste · ${FUELS[fuel]} · ${radius} km</span>
+        <span class="eyebrow">${say("Am billigschde", "Günstigste")} · ${FUELS[fuel]} · ${radius} km</span>
         <div class="pricerow"><div class="price">${price(best[fuel])}<span class="cur">€</span></div>
-          ${withPrice.length > 1 && save > 0.0005 ? `<div class="save"><span class="eyebrow">Ersparnis</span><b>${eur2(save * 50)}</b><span>bei 50 l ggü. Ø</span></div>` : ""}</div>
+          ${withPrice.length > 1 && save > 0.0005 ? `<div class="save"><span class="eyebrow">${say("Gspart", "Ersparnis")}</span><b>${eur2(save * 50)}</b><span>bei 50 l ggü. Ø</span></div>` : ""}</div>
         <div class="station">${badge(best, lv(best), "lg")}
           <div style="min-width:0"><div class="where">${esc(best.brand)} · ${esc(best.place)}</div>
           <div class="sub">${esc(best.street)} · ${km(best.dist)}${stt.short ? " · " + esc(stt.short) : ""}</div></div></div>
         <div class="row" id="heroPills">
           ${withPrice.length > 1 && save > 0.0005 ? pill(-save, `${ct(-save)} unter Ø`) : ""}
         </div>
+        ${SW() && withPrice.length > 1 && save > 0.0005 ? `<p class="quip">🥨 ${brezel(save * 50)}</p>` : ""}
         <div class="row two">
           <button class="btn" data-route="${esc(best.id)}">${NAV} Route</button>
           <button class="btn secondary" data-detail="${esc(best.id)}">Details</button>
         </div>
       </section>`;
     } else if (view.src.type !== "none") {
-      h += `<div class="card empty"><div class="bigic">🌙</div><b>Gerade alles zu</b><p>Im Umkreis von ${radius} km ist keine Tankstelle mit ${FUELS[fuel]} geöffnet.</p></div>`;
+      h += `<div class="card empty"><div class="bigic">🌙</div><b>${say("Grad hot älles zu", "Gerade alles zu")}</b><p>${say(`Im Umkreis vo ${radius} km hot koi Tankstell mit ${FUELS[fuel]} offa. Morga isch au no a Dag.`, `Im Umkreis von ${radius} km ist keine Tankstelle mit ${FUELS[fuel]} geöffnet.`)}</p></div>`;
     }
     h += `<div id="tip"></div><div id="fc"></div>`;
 
@@ -950,7 +971,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
       h += `<div class="sec"><h2>Wochenreports</h2><span class="sub">${esc(view.base.name)}</span></div><div class="list">` + view.reports.map((r) =>
         `<button class="item" data-report="${esc(r.file)}"><div class="badge rank">📊</div><div class="info"><div class="name"><span>${esc(r.title)}</span></div></div>${CHEV}</button>`).join("") + `</div>`;
     }
-    h += `<p class="foot">Schwabensprit · Daten: Tankerkönig / MTS-K (CC BY 4.0)</p>`;
+    h += `<p class="foot">Schwabensprit${say(" – mir kennet älles, au billig tanka", "")} · Daten: Tankerkönig / MTS-K (CC BY 4.0)</p>`;
     main.innerHTML = h;
     checkHealth();
     if (viewMode === "map" && view.stations.length) mountMap();
@@ -973,15 +994,16 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
     if (sum.days > 1) {
       const hNow = new Date().getHours(), devNow = sum.hourAvg[hNow], bh = sum.bestHour;
       let verdict = "";
-      if (devNow != null) verdict = devNow <= sum.hourAvg[bh] + 0.01 ? "<b>Jetzt ist eine gute Zeit zum Tanken.</b>"
-        : devNow > 0.01 ? `Jetzt (${hNow} Uhr) ist es typischerweise <b>${ct(devNow)} teurer</b> als im Tagesmittel – wenn möglich warten.`
-        : `Jetzt (${hNow} Uhr) liegt der Preis meist etwa im Tagesmittel.`;
+      if (devNow != null) verdict = devNow <= sum.hourAvg[bh] + 0.01 ? say("<b>Etz isch a guate Zeit – nix wie na an d'Zapfsäul!</b>", "<b>Jetzt ist eine gute Zeit zum Tanken.</b>")
+        : devNow > 0.01 ? say(`Um ${hNow} Uhr isch's meischtens <b>${fmtNum(devNow * 100, 1)} ct deirer</b> als im Tagesschnitt. Wenn's net pressiert: wart a bissle – mir hen's jo net zom Verschenka.`,
+            `Jetzt (${hNow} Uhr) ist es typischerweise <b>${fmtNum(devNow * 100, 1)} ct teurer</b> als im Tagesmittel – wenn möglich warten.`)
+        : say(`Um ${hNow} Uhr isch dr Preis meischtens so mittel – ka mr macha, muss mr aber net.`, `Jetzt (${hNow} Uhr) liegt der Preis meist etwa im Tagesmittel.`);
       $("#tip").innerHTML = `<section class="card">
-        <div class="tiphead"><div class="ic">${CLOCK}</div><div><b>Beste Tankzeit: ${bh}–${bh + 1} Uhr</b>
-          <div class="sub">${ct(sum.hourAvg[bh])} ggü. Tagesmittel · am teuersten ${sum.worstHour}–${sum.worstHour + 1} Uhr</div></div></div>
+        <div class="tiphead"><div class="ic">${CLOCK}</div><div><b>${say(`Am billigschde: ${bh}–${bh + 1} Uhr`, `Beste Tankzeit: ${bh}–${bh + 1} Uhr`)}</b>
+          <div class="sub">${say(`${ct(sum.hourAvg[bh])} gegenüber em Tagesschnitt · am deirschde ${sum.worstHour}–${sum.worstHour + 1} Uhr`, `${ct(sum.hourAvg[bh])} ggü. Tagesmittel · am teuersten ${sum.worstHour}–${sum.worstHour + 1} Uhr`)}</div></div></div>
         ${stripChart(sum.hourAvg)}
         <div class="legend" style="margin-top:6px"><span><i class="kr" style="background:var(--lo)"></i>günstiger</span><span><i class="kr" style="background:var(--hi)"></i>teurer</span><span>▼ jetzt</span></div>
-        <p class="verdict">${verdict}${sum.bestWd != null ? ` Günstigster Wochentag: ${WD[sum.bestWd]}.` : ""}</p>
+        <p class="verdict">${verdict}${sum.bestWd != null ? say(` Am billigschde isch's meischtens am ${WD_SCHW[sum.bestWd]}.`, ` Günstigster Wochentag: ${WD_LONG[sum.bestWd]}.`) : ""}</p>
       </section>`;
     }
     let h = `<div class="sec"><h2>${sum.days >= 6 ? "Letzte 7 Tage" : "Bisher gesammelt"}</h2><span class="sub">${FUELS[fuel]} · ${radius} km</span></div>
@@ -1098,7 +1120,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
         <div class="card chartcard"><div class="t">Preisverlauf</div><div class="s">${esc(s.brand)} im Vergleich zum Ø im Umkreis</div>
           ${lineChart([{ name: s.brand, pts }, { name: "Ø Umkreis", cls: "ref", pts: regPts }, { name: "Prognose", cls: "proj", pts: fcPts, band: fcBand }])}
           <div class="legend"><span><i class="k"></i>${esc(s.brand)}</span><span><i class="k ref"></i>Ø Umkreis</span>${fcPts.length ? `<span><i class="k proj"></i>Prognose 24 h</span>` : ""}</div>
-          ${fcBest ? `<div class="facts"><div>Prognose: am günstigsten voraussichtlich gegen <b>${hm(new Date(fcBest[0]))} Uhr</b> (≈ ${eurA(fcBest[1])}, ±${fmtNum(fcErr(fcData, fcBest[0]) * 100, 1)} ct).</div></div>` : ""}
+          ${fcBest ? `<div class="facts"><div>${say("Prognose: am billigschde voraussichtlich geg", "Prognose: am günstigsten voraussichtlich gegen")} <b>${hm(new Date(fcBest[0]))} Uhr</b> (≈ ${eurA(fcBest[1])}, ±${fmtNum(fcErr(fcData, fcBest[0]) * 100, 1)} ct).</div></div>` : ""}
           ${tbl(["Tag", "Ø", "Tief", "Hoch"], dailyRows(pts))}</div>`;
       if (Object.keys(days).length > 1)
         h += `<div class="card chartcard"><div class="t">Preis nach Uhrzeit</div><div class="s">Abweichung vom Tagesmittel dieser Tankstelle</div>
@@ -1573,16 +1595,17 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
         403: "Dem Schlüssel fehlt die Berechtigung „Actions: Read and write“",
         404: "Repository nicht gefunden – ist es beim Schlüssel unter „Repository access“ ausgewählt?",
       }[r.status] || `GitHub-Fehler ${r.status}`);
-      toast(aktion === "report" ? "Wochenreport wird erstellt – dauert ca. 1–2 Minuten." : "Abruf gestartet – neue Preise in ca. 1–2 Minuten.", 0);
+      toast(aktion === "report" ? say("Dr Wochenreport wird gmacht – dauert a Minütle oder zwoi.", "Wochenreport wird erstellt – dauert ca. 1–2 Minuten.")
+        : say("Abruf läuft – in 1–2 Minuta gibt's frische Preis.", "Abruf gestartet – neue Preise in ca. 1–2 Minuten."), 0);
       const before = JSON.stringify(bases.map((b) => b.updated)), beforeRep = view?.reports?.length;
       for (let i = 0; i < 24; i++) {
         await new Promise((res) => setTimeout(res, 15000));
         try {
           const b = await fetchData("data/bases.json");
-          if (JSON.stringify(b.map((x) => x.updated)) !== before || aktion === "report" && i > 6) { await load(true); toast("Aktualisiert ✓"); return; }
+          if (JSON.stringify(b.map((x) => x.updated)) !== before || aktion === "report" && i > 6) { await load(true); toast(aktion === "report" ? say("Sodele, dr Report isch do ✓", "Aktualisiert ✓") : say("Sodele, frische Preis sind do ✓", "Aktualisiert ✓")); return; }
         } catch {}
       }
-      toast("Dauert länger als erwartet – später neu laden.", 5000);
+      toast(say("Des dauert länger als denkt – nochher nomol neu lada.", "Dauert länger als erwartet – später neu laden."), 5000);
     } catch (e) {
       toast("Fehler: " + e.message, 6000);
     } finally { btn.classList.remove("spin"); }
@@ -1592,6 +1615,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
     $("#inRepo").value = store.get("repo", "") || defaultRepo();
     $("#inToken").value = token();
     $("#inTk").value = store.get("tk", "");
+    $("#inDialect").checked = SW();
     $("#testOut").innerHTML = "";
     $("#dlg").showModal();
   }
@@ -1599,6 +1623,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
     store.set("repo", $("#inRepo").value.trim());
     store.set("token", $("#inToken").value.trim());
     store.set("tk", $("#inTk").value.trim());
+    store.set("dialect", $("#inDialect").checked ? "1" : "0");
     dataMode = null; bases = [];
   }
   // Prüft Schlüssel und Rechte, ohne etwas auszulösen: Ein Start auf einen nicht
@@ -1625,7 +1650,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
     } catch (e) { h += line(false, "Keine Verbindung zu GitHub: " + esc(e.message)); }
     out.innerHTML = h;
   });
-  $("#dlg").addEventListener("close", () => { if ($("#dlg").returnValue === "save") { saveSettings(); toast("Gespeichert."); load(true); } });
+  $("#dlg").addEventListener("close", () => { if ($("#dlg").returnValue === "save") { saveSettings(); toast(say("Sodele, gspeichert.", "Gespeichert.")); load(true); } });
   $("#btnReport").addEventListener("click", () => { saveSettings(); $("#dlg").close(); dispatch("report"); });
   $("#btnSettings").addEventListener("click", openSettings);
   $("#btnFetch").addEventListener("click", () => dispatch("abrufen"));
