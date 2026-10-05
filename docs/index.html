@@ -230,6 +230,10 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
       <button class="btn" value="save">Speichern</button>
     </div>
     <div class="actions">
+      <button class="btn secondary block" id="btnTest" type="button">Verbindung testen</button>
+    </div>
+    <div id="testOut" class="small" style="margin-top:10px;line-height:1.6"></div>
+    <div class="actions">
       <button class="btn secondary block" id="btnReport" type="button">Wochenreport jetzt erstellen</button>
     </div>
   </form>
@@ -932,6 +936,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
     $("#inRepo").value = store.get("repo", "") || defaultRepo();
     $("#inToken").value = token();
     $("#inTk").value = store.get("tk", "");
+    $("#testOut").innerHTML = "";
     $("#dlg").showModal();
   }
   function saveSettings() {
@@ -940,6 +945,30 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
     store.set("tk", $("#inTk").value.trim());
     dataMode = null; bases = [];
   }
+  // Prüft Schlüssel und Rechte, ohne etwas auszulösen: Ein Start auf einen nicht
+  // existierenden Branch antwortet mit 422, wenn das Recht vorhanden ist, sonst mit 403/404.
+  $("#btnTest").addEventListener("click", async () => {
+    const r = $("#inRepo").value.trim(), t = $("#inToken").value.trim(), out = $("#testOut");
+    const line = (ok, txt) => `${ok ? "✅" : "❌"} ${txt}<br>`;
+    const where = navigator.standalone ? "App vom Home-Bildschirm" : "Safari / Browser";
+    let h = `Schlüssel …${esc(t.slice(-4)) || "(leer)"} · Repository ${esc(r) || "(leer)"} · ${where}<br>`;
+    out.innerHTML = h + "Prüfe …";
+    if (!r || !t) { out.innerHTML = h + line(false, "Repository und Schlüssel ausfüllen."); return; }
+    const H = { Authorization: `Bearer ${t}`, Accept: "application/vnd.github+json" };
+    try {
+      const a = await fetch(`https://api.github.com/repos/${r}/contents/docs/data/bases.json?ref=main`, { headers: H, cache: "no-store" });
+      h += a.ok ? line(true, "Daten lesen erlaubt")
+        : line(false, { 401: "Schlüssel ungültig oder abgelaufen", 404: "Kein Zugriff – Repository beim Schlüssel nicht ausgewählt (oder Name falsch)", 403: "Lesen nicht erlaubt – „Contents: Read-only“ fehlt" }[a.status] || `Lesen: GitHub ${a.status}`);
+      const b = await fetch(`https://api.github.com/repos/${r}/actions/workflows/tankpreise.yml/dispatches`, {
+        method: "POST", headers: { ...H, "Content-Type": "application/json" }, body: JSON.stringify({ ref: "verbindungstest-gibt-es-nicht" }),
+      });
+      let msg = ""; try { msg = (await b.json()).message || ""; } catch {}
+      h += b.status === 422 ? line(true, "Abrufe starten erlaubt")
+        : line(false, { 401: "Abrufe starten: Schlüssel ungültig", 403: "Abrufe starten nicht erlaubt – „Actions: Read and write“ fehlt oder der Schlüssel gilt nicht für dieses Repository", 404: "Abrufe starten: Repository beim Schlüssel nicht ausgewählt" }[b.status] || `Abrufe starten: GitHub ${b.status}`)
+          + (msg ? `<span style="opacity:.8">GitHub: ${esc(msg)}</span><br>` : "");
+    } catch (e) { h += line(false, "Keine Verbindung zu GitHub: " + esc(e.message)); }
+    out.innerHTML = h;
+  });
   $("#dlg").addEventListener("close", () => { if ($("#dlg").returnValue === "save") { saveSettings(); toast("Gespeichert."); load(true); } });
   $("#btnReport").addEventListener("click", () => { saveSettings(); $("#dlg").close(); dispatch("report"); });
   $("#btnSettings").addEventListener("click", openSettings);
