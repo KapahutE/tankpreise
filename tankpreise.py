@@ -328,7 +328,7 @@ def fetch(cfg):
 # --------------------------------------------------------------------------- Öffnungszeiten
 
 HOURS_MAX_AGE = timedelta(days=7)   # Öffnungszeiten ändern sich selten
-HOURS_PER_RUN = 5                   # Obergrenze an Detail-Abfragen pro Lauf
+HOURS_PER_RUN = 2                   # Obergrenze an Detail-Abfragen pro Lauf
 
 _DAY_TOKENS = [
     ("montag", 0), ("dienstag", 1), ("mittwoch", 2), ("donnerstag", 3), ("freitag", 4),
@@ -402,7 +402,7 @@ def update_opening_times(cfg, store, station_ids, now=None):
             break
         hours[sid] = {"fetched": now.isoformat(timespec="minutes"), **normalize_hours(st)}
         done += 1
-        time.sleep(3)
+        time.sleep(10)
     if done:
         store.save_hours(hours)
         log.info("Öffnungszeiten für %d Tankstellen aktualisiert.", done)
