@@ -1074,16 +1074,14 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
   function closeReport() { $("#report").classList.remove("open"); }
   $("#btnRepBack").addEventListener("click", () => { closeReport(); try { window.history.back(); } catch {} });
 
-  // ---- Kartenansicht (Leaflet + CARTO-Kacheln, wird erst beim ersten Öffnen geladen)
+  // ---- Kartenansicht (Leaflet + OpenStreetMap-Kacheln, wird erst beim ersten Öffnen geladen)
   const LEAFLET = {
     js: "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js", jsI: "sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=",
     css: "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css", cssI: "sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=",
   };
   const darkMq = matchMedia("(prefers-color-scheme: dark)");
-  // Kartenhintergrund: CARTO; liefert der Dienst keine Kacheln, automatisch OpenStreetMap
+  // Kartenhintergrund: OpenStreetMap (ohne API-Schlüssel; CARTO verlangt inzwischen einen)
   const TILES = [
-    { url: () => `https://{s}.basemaps.cartocdn.com/${darkMq.matches ? "dark_all" : "light_all"}/{z}/{x}/{y}{r}.png`, subdomains: "abcd",
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · © <a href="https://carto.com/attributions">CARTO</a>' },
     { url: () => "https://tile.openstreetmap.org/{z}/{x}/{y}.png", subdomains: "",
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', osm: true },
   ];
