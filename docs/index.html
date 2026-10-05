@@ -216,6 +216,8 @@ details.tbl th{color:var(--muted);font-weight:650}
 .notice{display:flex;gap:12px;align-items:flex-start;font-size:14px;color:var(--muted)}
 .notice b{color:var(--fg)}
 .notice .ic{font-size:20px;line-height:1.2}
+.warnbox{box-shadow:inset 0 0 0 2px var(--warn),var(--shadow)}
+.warnbox .btn{padding:8px 12px;font-size:14px}
 .empty{text-align:center;color:var(--muted);padding:28px 16px}
 .empty b{display:block;color:var(--fg);font-size:17px;margin:6px 0 4px}
 .empty p{margin:0 0 14px}
@@ -591,6 +593,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
 
   // Lädt alles für den aktuellen Ort und baut die Ansicht
   async function load(force = false) {
+    if (force) healthAt = 0;
     if (view && !view.error) $("#main").classList.add("busy");
     try {
       if (!bases.length || force) await loadBases();
@@ -800,7 +803,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
     const st = $("#stand");
     if (view?.updated) {
       const age = (Date.now() - new Date(view.updated)) / 60000;
-      st.className = "stand" + (age < 20 ? " fresh" : age > 120 ? " old" : "");
+      st.className = "stand" + (age < 20 ? " fresh" : age > 35 ? " old" : "");
       st.innerHTML = `<i></i>${view.live ? "Live · " : ""}Stand ${esc(ago(view.updated))}`;
     } else st.innerHTML = "";
     const main = $("#main");
@@ -813,6 +816,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
       return;
     }
     let h = "";
+    h += `<div id="health">${healthHtml}</div>`;
     if (view.src.type === "partial")
       h += `<div class="card notice"><span class="ic">ℹ️</span><div><b>Teilweise außerhalb deiner Bases.</b> Es werden nur Tankstellen aus ${esc(view.base.name)} angezeigt. Für vollständige Live-Preise trage unter ⚙ deinen Tankerkönig-Schlüssel ein.</div></div>`;
     if (view.src.type === "none")
@@ -882,6 +886,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
     }
     h += `<p class="foot">Schwabensprit · Daten: Tankerkönig / MTS-K (CC BY 4.0)</p>`;
     main.innerHTML = h;
+    checkHealth();
     if (viewMode === "map" && view.stations.length) mountMap();
     renderAnalysis();
   }
@@ -1419,6 +1424,54 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11p
   });
   $("#btnLocDone").addEventListener("click", () => $("#dlgLoc").close());
   $("#dlgLoc").addEventListener("close", () => { if (locChanged) load(); });
+
+  // ---- Statusmeldung: veraltete Daten oder hängende/fehlgeschlagene Läufe bei GitHub
+  let healthHtml = "", healthAt = 0;
+  const minsAgo = (iso) => Math.round((Date.now() - new Date(iso)) / 60000);
+  async function lastRun(repoName, workflow, auth) {
+    const r = await fetch(`https://api.github.com/repos/${repoName}/actions/workflows/${workflow}/runs?per_page=3`, {
+      headers: { Accept: "application/vnd.github+json", ...(auth ? { Authorization: `Bearer ${auth}` } : {}) }, cache: "no-store",
+    });
+    if (!r.ok) return null;
+    return (await r.json()).workflow_runs || [];
+  }
+  function describe(runs, what) {
+    if (!runs?.length) return null;
+    const run = runs[0], age = minsAgo(run.created_at);
+    if (["queued", "waiting", "pending", "requested"].includes(run.status) && age >= 10)
+      return `${what} wartet seit ${age} Min. bei GitHub auf einen freien Rechner.`;
+    if (run.status === "in_progress" && age >= 20) return `${what} läuft seit ${age} Min. ungewöhnlich lange.`;
+    if (run.status === "completed" && ["failure", "timed_out", "startup_failure"].includes(run.conclusion))
+      return `${what} ist um ${hm(new Date(run.updated_at))} Uhr fehlgeschlagen.`;
+    if (run.status === "completed" && run.conclusion === "cancelled" && runs[1]?.conclusion !== "success")
+      return `${what} wurde bei GitHub abgebrochen (${hm(new Date(run.updated_at))} Uhr).`;
+    return null;
+  }
+  async function checkHealth(force) {
+    if (!view || view.error || view.live) { healthHtml = ""; return; }
+    if (!force && Date.now() - healthAt < 120000) return paintHealth();
+    healthAt = Date.now();
+    const msgs = [];
+    const age = view.updated ? minsAgo(view.updated) : null;
+    if (age != null && age > 35) msgs.push(`Die Preise sind ${age >= 120 ? `${Math.round(age / 60)} Std.` : `${age} Min.`} alt – normalerweise kommt alle 15 Minuten ein neuer Abruf.`);
+    try {
+      if (token() && repo()) {
+        const m = describe(await lastRun(repo(), "tankpreise.yml", token()), "Der Preisabruf");
+        if (m) msgs.push(m);
+      }
+      const host = location.hostname.match(/^([^.]+)\.github\.io$/), seg = location.pathname.split("/").filter(Boolean)[0];
+      if (host && seg && `${host[1]}/${seg}`.toLowerCase() !== repo().toLowerCase()) {
+        const m = describe(await lastRun(`${host[1]}/${seg}`, "pages.yml"), "Die Veröffentlichung der neuesten App-Version");
+        if (m) msgs.push(m);
+      }
+    } catch {}
+    healthHtml = msgs.length ? `<div class="card notice warnbox"><span class="ic">⚠️</span><div><b>Hinweis zur Aktualisierung</b><br>${msgs.map(esc).join("<br>")}
+      <div class="row" style="margin-top:10px"><a class="btn secondary" href="https://github.com/${esc(repo())}/actions" target="_blank" rel="noopener">Bei GitHub ansehen</a>
+      ${token() ? `<button class="btn" id="btnRetry">Abruf neu starten</button>` : ""}</div></div></div>` : "";
+    paintHealth();
+  }
+  function paintHealth() { const el = $("#health"); if (el && el.innerHTML !== healthHtml) el.innerHTML = healthHtml; }
+  document.addEventListener("click", (e) => { if (e.target.closest("#btnRetry")) { healthAt = 0; dispatch("abrufen"); } });
 
   // ---- Abruf bei GitHub starten (Knopf ↻)
   async function dispatch(aktion) {
