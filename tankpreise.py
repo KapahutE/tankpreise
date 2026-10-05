@@ -20,6 +20,7 @@ Nur Python-Standardbibliothek, keine zusätzlichen Pakete nötig.
 """
 
 import argparse
+import bisect
 import configparser
 import csv
 import glob
@@ -227,16 +228,20 @@ class Store:
         return out
 
     def changes(self, start=None, end=None):
-        """Preisänderungen (ts, sid, Sorte, alt, neu) im Zeitraum, nur zwischen zwei Abrufen,
-        bei denen die Tankstelle geöffnet war."""
-        events, _ = self._events(start, end)
+        """Preisänderungen (Zeitpunkt, sid, Sorte, alt, neu) im Zeitraum, nur zwischen zwei Abrufen,
+        bei denen die Tankstelle geöffnet war. Entdeckt wird eine Änderung erst beim nächsten Abruf;
+        als Zeitpunkt gilt daher die Mitte zwischen vorherigem und entdeckendem Abruf."""
+        events, polls = self._events(start, end)
         state, out = {}, []
         for ts, sid, prices, is_open in events:
             old = state.get(sid)
             if old and old[1] and is_open and not (start and ts < start or end and ts >= end):
+                i = bisect.bisect_left(polls, ts)
+                prev = polls[i - 1] if i > 0 else None
+                est = ts - (ts - prev) / 2 if prev and ts - prev <= timedelta(hours=2) else ts
                 for f, a, b in zip(FUELS, old[0], prices):
                     if a is not None and b is not None and abs(a - b) > 1e-9:
-                        out.append((ts, sid, f, a, b))
+                        out.append((est, sid, f, a, b))
             state[sid] = (prices, is_open)
         return out
 
@@ -638,20 +643,22 @@ def svg_bars(values, labels, width=720, height=200):
 
 
 CSS = """
-:root{--bg:#fff;--fg:#1d2329;--muted:#66707a;--card:#f5f7f9;--line:#d9dee3;--acc:#2563eb;--good:#16a34a;--bad:#dc2626}
-@media (prefers-color-scheme:dark){:root{--bg:#121619;--fg:#e6e9ec;--muted:#9aa4ad;--card:#1b2126;--line:#2d353c;--acc:#60a5fa;--good:#4ade80;--bad:#f87171}}
-body{background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;max-width:920px;margin:0 auto;padding:16px}
-h1{margin-bottom:0} .sub{color:var(--muted);margin-top:4px}
-section{background:var(--card);border-radius:10px;padding:16px;margin:20px 0}
+:root{--bg:#f2f2f7;--fg:#1c1c1e;--muted:#6e6e73;--card:#fff;--line:#e5e5ea;--grid:#e1e0d9;--axis:#c3c2b7;
+  --lo:#2a78d6;--hi:#e34948;--acc:#8a5b00}
+@media (prefers-color-scheme:dark){:root{--bg:#000;--fg:#f2f2f7;--muted:#98989f;--card:#1c1c1e;--line:#2c2c2e;--grid:#2c2c2a;--axis:#383835;
+  --lo:#3987e5;--hi:#e66767;--acc:#f5b800}}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,system-ui,sans-serif;max-width:920px;margin:0 auto;padding:16px;-webkit-font-smoothing:antialiased}
+h1{margin-bottom:0;letter-spacing:-.02em} h2{letter-spacing:-.01em} .sub{color:var(--muted);margin-top:4px}
+section{background:var(--card);border-radius:18px;padding:16px;margin:20px 0}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
-.kpi b{display:block;font-size:22px} .kpi span{color:var(--muted);font-size:13px}
+.kpi b{display:block;font-size:22px;letter-spacing:-.02em} .kpi span{color:var(--muted);font-size:13px}
 table{width:100%;border-collapse:collapse;font-size:14px} th,td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:left}
 td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .chart{width:100%;height:auto} .chart text{fill:var(--muted);font-size:11px}
-.grid{stroke:var(--line);stroke-width:1} .axis{stroke:var(--muted)}
-.line{fill:none;stroke:var(--acc);stroke-width:2}
-.up{fill:var(--bad);opacity:.6} .down{fill:var(--good);opacity:.6} .best{fill:var(--good)}
-.good{color:var(--good)} .bad{color:var(--bad)}
+.grid{stroke:var(--grid);stroke-width:1} .axis{stroke:var(--axis)}
+.line{fill:none;stroke:var(--lo);stroke-width:2;stroke-linejoin:round}
+.up{fill:var(--hi)} .down{fill:var(--lo)} .best{fill:var(--lo)}
+.good{color:var(--fg)} .bad{color:var(--fg)}
 .tablewrap{overflow-x:auto}
 """
 

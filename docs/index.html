@@ -6,148 +6,285 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Tankpreise">
+<meta name="apple-mobile-web-app-title" content="Schwabensprit">
 <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.webmanifest">
-<title>Tankpreise</title>
+<title>Schwabensprit</title>
 <style>
+/* Schwabensprit – Farben als Rollen. Gold = Bedienung, Blau/Grau/Rot = Preisniveau (günstig/mittel/teuer). */
 :root{
-  --bg:#f2f2f7;--card:#fff;--fg:#1c1c1e;--muted:#6e6e73;--line:#e5e5ea;
-  --acc:#0a7cff;--good:#1a9f4a;--good-bg:#e3f6e9;--bad:#d93025;--bad-bg:#fde8e6;--seg:#e3e3e8;
+  color-scheme:light;
+  --bg:#f2f2f7;--bg-a:rgba(242,242,247,.82);--card:#fff;--card2:#f6f6f8;--fg:#1c1c1e;--muted:#6e6e73;--line:#e5e5ea;--seg:#e3e3e8;
+  --acc:#f2b300;--acc-ink:#8a5b00;--on-acc:#1b1300;--acc-glow:rgba(242,179,0,.22);
+  --lo:#2a78d6;--mid:#898781;--hi:#e34948;
+  --lo-bg:rgba(42,120,214,.12);--mid-bg:rgba(137,135,129,.14);--hi-bg:rgba(227,73,72,.12);
+  --ok:#0ca30c;--warn:#fab219;--grid:#e1e0d9;--axis:#c3c2b7;
+  --shadow:0 1px 2px rgba(0,0,0,.04),0 6px 20px rgba(0,0,0,.05);
 }
 @media (prefers-color-scheme:dark){:root{
-  --bg:#000;--card:#1c1c1e;--fg:#f2f2f7;--muted:#98989f;--line:#2c2c2e;
-  --acc:#3d9bff;--good:#3ddc84;--good-bg:#0f2e1b;--bad:#ff6b5e;--bad-bg:#3a1512;--seg:#2c2c2e;
+  color-scheme:dark;
+  --bg:#000;--bg-a:rgba(0,0,0,.72);--card:#1c1c1e;--card2:#2c2c2e;--fg:#f2f2f7;--muted:#98989f;--line:#2c2c2e;--seg:#2c2c2e;
+  --acc:#f5b800;--acc-ink:#f5b800;--on-acc:#1b1300;--acc-glow:rgba(245,184,0,.16);
+  --lo:#3987e5;--mid:#898781;--hi:#e66767;
+  --lo-bg:rgba(57,135,229,.22);--mid-bg:rgba(137,135,129,.22);--hi-bg:rgba(230,103,103,.22);
+  --grid:#2c2c2a;--axis:#383835;--shadow:none;
 }}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--fg)}
-body{font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
-  padding:calc(env(safe-area-inset-top) + 12px) 16px calc(env(safe-area-inset-bottom) + 24px);
+body{font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;-webkit-font-smoothing:antialiased;
+  padding:calc(env(safe-area-inset-top) + 10px) 16px calc(env(safe-area-inset-bottom) + 28px);
   max-width:640px;margin:0 auto;overscroll-behavior-y:contain}
 body.lock{overflow:hidden}
-header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:12px}
-h1{font-size:30px;margin:0;letter-spacing:-.02em}
+button{font:inherit;border:0;cursor:pointer;color:inherit;background:none}
 .sub{color:var(--muted);font-size:14px}
-#stand{white-space:pre-line}
-h2{font-size:20px;margin:28px 4px 8px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
-h2 .sub{font-weight:400}
-button{font:inherit;border:0;cursor:pointer;color:inherit}
-.iconbtn{background:var(--card);color:var(--acc);width:40px;height:40px;border-radius:20px;display:grid;place-items:center;flex:none}
-.iconbtn svg{width:22px;height:22px}
-.seg{display:flex;background:var(--seg);border-radius:10px;padding:2px;margin:8px 0 16px}
-.seg button{flex:1;padding:7px 0;border-radius:8px;background:none;font-size:15px;font-weight:500}
-.seg button.on{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.15)}
-.chips{display:flex;gap:8px;margin:0 0 10px;flex-wrap:wrap}
-.chip{padding:6px 12px;border-radius:999px;background:var(--card);font-size:14px;font-weight:500;color:var(--muted)}
-.chip.on{background:var(--acc);color:#fff}
-.card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:12px}
-.hero .label{color:var(--muted);font-size:14px}
-.hero .price{font-size:52px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.1;margin:4px 0}
-.hero .price sup{font-size:26px}
-.hero .where{font-weight:600}
-.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.small{font-size:13px;color:var(--muted)} .small a{color:var(--acc-ink)}
+.eyebrow{display:block;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+
+/* Kopf */
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{width:36px;height:36px;flex:none;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.wordmark{font-size:27px;font-weight:800;letter-spacing:-.035em;line-height:1}
+.iconbtn{background:var(--card);color:var(--acc-ink);width:40px;height:40px;border-radius:20px;display:grid;place-items:center;flex:none;box-shadow:var(--shadow)}
+.iconbtn svg{width:21px;height:21px}
+.locrow{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin:12px 0 0}
+.locbtn{display:inline-flex;align-items:center;gap:7px;background:var(--card);color:var(--fg);font-size:15px;font-weight:650;
+  padding:7px 12px 7px 10px;border-radius:999px;box-shadow:var(--shadow);max-width:100%;text-align:left}
+.locbtn .lp{color:var(--acc-ink);flex:none}
+.locbtn .cv{color:var(--muted);flex:none}
+.locbtn span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.stand{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted)}
+.stand i{width:8px;height:8px;border-radius:50%;background:var(--mid);flex:none}
+.stand.fresh i{background:var(--ok);animation:pulse 2.2s infinite}
+.stand.old i{background:var(--warn)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(12,163,12,.45)}70%{box-shadow:0 0 0 7px rgba(12,163,12,0)}100%{box-shadow:0 0 0 0 rgba(12,163,12,0)}}
+
+/* Sortenwahl bleibt beim Scrollen oben */
+.sticky{position:sticky;top:0;z-index:20;margin:8px -16px 6px;padding:8px 16px;background:var(--bg-a);
+  -webkit-backdrop-filter:saturate(180%) blur(18px);backdrop-filter:saturate(180%) blur(18px)}
+.seg{display:flex;background:var(--seg);border-radius:11px;padding:2px}
+.seg button{flex:1;padding:7px 0;border-radius:9px;font-size:15px;font-weight:650;color:var(--muted)}
+.seg button.on{background:var(--card);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.14)}
+.seg.mini{display:inline-flex}.seg.mini button{flex:none;padding:5px 13px;font-size:13px}
+
+/* Karten & Abschnitte */
+.card{background:var(--card);border-radius:18px;padding:16px;margin-bottom:12px;box-shadow:var(--shadow)}
+.sec{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:28px 4px 10px}
+.sec h2{font-size:21px;letter-spacing:-.02em;margin:0}
+
+/* Startkarte */
+.hero{position:relative;overflow:hidden;margin-top:6px;
+  background:radial-gradient(130% 95% at 100% 0%,var(--acc-glow),transparent 60%),var(--card)}
+.pricerow{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:12px 0 16px}
+.hero .price{font-size:62px;font-weight:800;letter-spacing:-.045em;line-height:1}
+.save{text-align:right;font-size:12px;color:var(--muted);padding-bottom:4px;flex:none}
+.save b{display:block;font-size:22px;font-weight:750;color:var(--fg);letter-spacing:-.02em;margin:2px 0 1px}
+.hero .price sup{font-size:30px;letter-spacing:0;margin-left:2px}
+.hero .price .cur{font-size:30px;font-weight:700;color:var(--muted);margin-left:8px;letter-spacing:0}
+.station{display:flex;align-items:center;gap:12px;min-width:0}
+.station .where{font-weight:700;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.station .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .row.two{flex-wrap:nowrap}.row.two .btn{flex:1}
-.stats .pill{font-size:12px;margin-top:4px}
-.pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:13px;font-weight:600}
-.pill.good{background:var(--good-bg);color:var(--good)} .pill.bad{background:var(--bad-bg);color:var(--bad)}
-.pill.neutral{background:var(--seg);color:var(--muted)}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 16px;border-radius:12px;background:var(--acc);color:#fff;font-weight:600;text-decoration:none}
+
+/* Pillen: Bedeutung über farbigen Punkt + Text, die Schrift bleibt in Schriftfarbe */
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:13px;font-weight:650;background:var(--mid-bg);color:var(--fg);white-space:nowrap}
+.pill i{width:8px;height:8px;border-radius:50%;background:var(--mid);flex:none}
+.pill.lo{background:var(--lo-bg)}.pill.lo i{background:var(--lo)}
+.pill.hi{background:var(--hi-bg)}.pill.hi i{background:var(--hi)}
+.pill.ok i{background:var(--ok)}
+.pill.plain{background:var(--seg)}.pill.plain i{display:none}
+
+/* Knöpfe */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 16px;border-radius:14px;background:var(--acc);color:var(--on-acc);font-weight:700;text-decoration:none}
 .btn svg{width:18px;height:18px}
-.btn.secondary{background:var(--seg);color:var(--acc)}
+.btn.secondary{background:var(--seg);color:var(--fg)}
 .btn.block{width:100%}
-.tip{display:flex;gap:12px;align-items:flex-start}
-.tip .emoji{font-size:24px;line-height:1}
-.list{background:var(--card);border-radius:14px;overflow:hidden}
-.item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);color:inherit;text-decoration:none;width:100%;background:none;text-align:left}
+.btn:active,.iconbtn:active,.locbtn:active,.chip:active{transform:scale(.97)}
+
+/* Markenkürzel, Rahmen = Preisniveau */
+.badge{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;flex:none;font-weight:800;font-size:15px;letter-spacing:-.02em;
+  color:var(--fg);background:var(--mid-bg);box-shadow:inset 0 0 0 2px var(--mid)}
+.badge.t3{font-size:11.5px;letter-spacing:0}
+.badge.lv-lo{background:var(--lo-bg);box-shadow:inset 0 0 0 2px var(--lo)}
+.badge.lv-hi{background:var(--hi-bg);box-shadow:inset 0 0 0 2px var(--hi)}
+.badge.lv-off{background:var(--seg);box-shadow:none;color:var(--muted)}
+.badge.rank{background:var(--seg);box-shadow:none;font-size:16px}
+.badge.lg{width:48px;height:48px;border-radius:15px;font-size:18px}.badge.lg.t3{font-size:13px}
+.badge.xl{width:60px;height:60px;border-radius:18px;font-size:22px}.badge.xl.t3{font-size:16px}
+
+/* Tankzeit-Tipp */
+.tiphead{display:flex;gap:12px;align-items:center}
+.tiphead .ic{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:var(--acc-glow);color:var(--acc-ink);flex:none}
+.tiphead b{font-size:17px}
+.verdict{margin:10px 0 0;font-size:14px;color:var(--muted)}
+.verdict b{color:var(--fg)}
+
+/* Liste */
+.chips{display:flex;gap:8px;margin:0 0 10px;flex-wrap:wrap}
+.chip{padding:6px 13px;border-radius:999px;background:var(--card);font-size:14px;font-weight:650;color:var(--muted);box-shadow:var(--shadow)}
+.chip.on{background:var(--acc);color:var(--on-acc)}
+.lvlegend{display:flex;gap:6px 14px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted);margin:0 4px 10px}
+.lvlegend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.list{background:var(--card);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+.item{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--line);color:inherit;text-decoration:none;width:100%;text-align:left}
 .item:last-child{border-bottom:0}
-.item:active{background:var(--seg)}
+.item:active{background:var(--card2)}
 .item .info{flex:1;min-width:0}
-.item .name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.item .addr{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.item .p{text-align:right;font-variant-numeric:tabular-nums}
-.item .p b{font-size:20px} .item .p b sup{font-size:12px}
+.item .name{font-weight:650;display:flex;align-items:center;gap:6px;min-width:0}
+.item .name span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag{font-size:11px;font-weight:650;color:var(--muted);background:var(--seg);border-radius:6px;padding:1px 6px;white-space:nowrap;flex:none}
+.item .addr{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.item .p{text-align:right;font-variant-numeric:tabular-nums;flex:none}
+.item .p b{font-size:20px;font-weight:700}.item .p b sup{font-size:12px}
 .item .d{font-size:12px;color:var(--muted)}
-.item.closed{opacity:.45}
-.item .hrs{font-weight:400;color:var(--muted);font-size:13px}
+.item.closed .info,.item.closed .p{opacity:.55}
+.chev{color:var(--muted);flex:none;opacity:.55}
+.more{text-align:center;color:var(--muted);font-size:13px;padding:14px}
+
+/* Kartenansicht */
+.mapcard{padding:0;overflow:hidden;height:min(64vh,540px);position:relative}
+#map{width:100%;height:100%}
+.leaflet-container{background:var(--card2);font:inherit}
+.leaflet-control-attribution{background:var(--bg-a)!important;color:var(--muted)!important;font-size:10px!important}
+.leaflet-control-attribution a{color:var(--muted)!important}
+.mk{background:none;border:0}
+.pin{position:absolute;left:0;top:0;transform:translate(-50%,calc(-100% - 7px));display:flex;align-items:center;gap:5px;padding:4px 9px 4px 7px;border-radius:999px;
+  background:var(--card);color:var(--fg);font-weight:700;font-size:13px;line-height:1.2;white-space:nowrap;box-shadow:0 1px 5px rgba(0,0,0,.28);font-variant-numeric:tabular-nums}
+.pin sup{font-size:9px}
+.pin i{width:9px;height:9px;border-radius:50%;background:var(--mid);flex:none}
+.pin::after{content:"";position:absolute;left:50%;bottom:-4px;width:9px;height:9px;background:var(--card);transform:translateX(-50%) rotate(45deg);border-radius:0 0 2px 0}
+.pin.lv-lo i{background:var(--lo)}.pin.lv-hi i{background:var(--hi)}
+.pin.best{background:var(--acc);color:var(--on-acc)}.pin.best::after{background:var(--acc)}
+.dotm{position:absolute;left:0;top:0;width:26px;height:26px;transform:translate(-50%,-50%);display:grid;place-items:center}
+.dotm::before{content:"";width:12px;height:12px;border-radius:50%;background:var(--mid);box-shadow:0 0 0 2px var(--card),0 1px 4px rgba(0,0,0,.3)}
+.dotm.lv-lo::before{background:var(--lo)}.dotm.lv-hi::before{background:var(--hi)}
+.dotm.lv-off::before{width:8px;height:8px;background:var(--card2);box-shadow:0 0 0 2px var(--mid)}
+.me{position:absolute;left:0;top:0;width:18px;height:18px;border-radius:50%;background:var(--acc);border:3px solid #fff;transform:translate(-50%,-50%);box-shadow:0 0 0 7px var(--acc-glow),0 1px 4px rgba(0,0,0,.35)}
+
+/* Kennzahlen */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.stats .card{margin:0}
+.stat .v{display:block;font-size:24px;font-weight:750;letter-spacing:-.02em;margin:3px 0 4px}
+.stat .pill{font-size:12px}
+
+/* Diagramme */
+.chartcard .t{font-weight:700;font-size:16px}
+.chartcard .s{font-size:13px;color:var(--muted);margin:2px 0 10px}
+.cw{position:relative;touch-action:pan-y;-webkit-user-select:none;user-select:none}
+svg.chart{width:100%;height:auto;display:block;overflow:visible}
+svg.chart text{fill:var(--muted);font-size:10.5px;font-family:inherit}
+svg.chart text.lbl{fill:var(--fg);font-weight:700;font-size:11px}
+.gl{stroke:var(--grid);stroke-width:1}.ax{stroke:var(--axis);stroke-width:1}
+.ln{fill:none;stroke:var(--lo);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.ln.ref{stroke:var(--mid)}
+.area{fill:var(--lo);fill-opacity:.10}
+.dot{fill:var(--lo);stroke:var(--card);stroke-width:2}
+.xh{stroke:var(--fg);stroke-width:1;stroke-opacity:.35}
+.b-lo{fill:var(--lo)}.b-hi{fill:var(--hi)}
+.bar.hl,.cell.hl{opacity:.6}
+.nowm{fill:var(--fg)}
+.tt{position:absolute;z-index:5;pointer-events:none;background:var(--fg);color:var(--bg);border-radius:10px;padding:7px 10px;font-size:12px;
+  box-shadow:0 6px 18px rgba(0,0,0,.22);white-space:nowrap;transform:translate(-50%,-100%)}
+.tt .h{opacity:.72;margin-bottom:3px}
+.tt .r{display:flex;align-items:center;gap:6px}
+.tt .r b{font-size:13px}
+.tt .k{width:12px;height:0;border-top:2px solid;display:inline-block}
+.tt .kr{width:9px;height:9px;border-radius:2px;display:inline-block}
+.legend{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:10px}
+.legend .k{display:inline-block;width:14px;height:0;border-top:2px solid var(--lo);vertical-align:middle;margin-right:5px}
+.legend .k.ref{border-color:var(--mid)}
+.legend .kr{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.facts{margin-top:12px;font-size:14px;display:grid;gap:4px}
+.arw{font-size:11px;margin-right:2px}.arw.hi{color:var(--hi)}.arw.lo{color:var(--lo)}
+details.tbl{margin-top:12px;font-size:13px}
+details.tbl summary{color:var(--acc-ink);cursor:pointer;font-weight:650;list-style:none}
+details.tbl summary::-webkit-details-marker{display:none}
+details.tbl summary::before{content:"▸ ";}
+details.tbl[open] summary::before{content:"▾ ";}
+details.tbl table{width:100%;border-collapse:collapse;margin-top:8px;font-variant-numeric:tabular-nums}
+details.tbl td,details.tbl th{padding:5px 2px;border-bottom:1px solid var(--line);text-align:right}
+details.tbl td:first-child,details.tbl th:first-child{text-align:left}
+details.tbl th{color:var(--muted);font-weight:650}
+
+/* Hinweise, Leer- und Ladezustände */
+.notice{display:flex;gap:12px;align-items:flex-start;font-size:14px;color:var(--muted)}
+.notice b{color:var(--fg)}
+.notice .ic{font-size:20px;line-height:1.2}
+.empty{text-align:center;color:var(--muted);padding:28px 16px}
+.empty b{display:block;color:var(--fg);font-size:17px;margin:6px 0 4px}
+.empty p{margin:0 0 14px}
+.bigic{font-size:34px}
+.skel{border-radius:18px;margin-bottom:12px;background:linear-gradient(90deg,var(--card) 0%,var(--card2) 50%,var(--card) 100%);background-size:200% 100%;animation:sh 1.3s infinite linear}
+@keyframes sh{to{background-position:-200% 0}}
+main.busy{opacity:.55;transition:opacity .2s}
+.foot{text-align:center;margin-top:26px;font-size:12px;color:var(--muted)}
+.toast{position:fixed;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom) + 16px);max-width:608px;margin:0 auto;background:var(--fg);color:var(--bg);padding:12px 16px;border-radius:14px;font-size:15px;
+  transform:translateY(150%);opacity:0;visibility:hidden;transition:transform .25s,opacity .25s,visibility .25s;z-index:50}
+.toast.show{transform:none;opacity:1;visibility:visible}
+#ptr{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top) + 4px);display:grid;place-items:center;pointer-events:none;z-index:25;opacity:0;transition:opacity .2s}
+#ptr div{width:36px;height:36px;border-radius:18px;background:var(--card);box-shadow:0 2px 8px rgba(0,0,0,.15);display:grid;place-items:center;color:var(--acc-ink)}
+#ptr svg{width:20px;height:20px}
+.spin{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Detailansicht */
+#detail{position:fixed;inset:0;background:var(--bg);z-index:30;overflow-y:auto;-webkit-overflow-scrolling:touch;transform:translateX(100%);transition:transform .28s ease;visibility:hidden}
+#detail.open{transform:none;visibility:visible}
+#detail .wrap{max-width:640px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 8px) 16px calc(env(safe-area-inset-bottom) + 28px)}
+.back{color:var(--acc-ink);font-size:17px;font-weight:600;padding:8px 0;display:inline-flex;align-items:center;gap:4px}
+.dhead{display:flex;gap:14px;align-items:center;margin:8px 0 2px;min-width:0}
+.dhead h1{font-size:28px;margin:0;letter-spacing:-.025em;line-height:1.1}
+.fuelgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:16px 0 12px}
+.ftile{background:var(--card);border-radius:15px;padding:10px 12px;text-align:left;box-shadow:var(--shadow);border:2px solid transparent}
+.ftile.on{border-color:var(--acc)}
+.ftile .n{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;white-space:nowrap}
+.ftile .n i{width:8px;height:8px;border-radius:50%;background:var(--mid);flex:none}
+.ftile .n i.lo{background:var(--lo)}.ftile .n i.hi{background:var(--hi)}.ftile .n i.off{background:none;box-shadow:inset 0 0 0 1.5px var(--mid)}
+.ftile b{display:block;font-size:22px;font-weight:750;margin:3px 0;font-variant-numeric:tabular-nums}
+.ftile b sup{font-size:12px}
+.ftile .r{font-size:12px;color:var(--muted)}
 .hours{width:100%;border-collapse:collapse;font-size:15px}
-.hours td{padding:7px 0;border-bottom:1px solid var(--line)}
+.hours td{padding:8px 0;border-bottom:1px solid var(--line)}
 .hours tr:last-child td{border-bottom:0}
 .hours td:last-child{text-align:right;font-variant-numeric:tabular-nums}
 .hours tr.today td{font-weight:700}
-.item.best .p b{color:var(--good)}
-.chev{color:var(--muted);flex:none}
-svg.chart{width:100%;height:auto;display:block}
-svg.chart text{fill:var(--muted);font-size:11px;font-family:inherit}
-.gl{stroke:var(--line)} .ln{fill:none;stroke:var(--acc);stroke-width:2;stroke-linejoin:round}
-.ln2{fill:none;stroke:var(--muted);stroke-width:1.5;stroke-dasharray:4 3;stroke-linejoin:round}
-.bar-up{fill:var(--bad);opacity:.55} .bar-down{fill:var(--good);opacity:.55} .bar-best{fill:var(--good)} .bar-now{stroke:var(--fg);stroke-width:1.5}
-.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:6px}
-.legend i{display:inline-block;width:14px;height:0;border-top:2px solid var(--acc);vertical-align:middle;margin-right:5px}
-.legend i.dash{border-top:2px dashed var(--muted)}
-.stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
-.stats .card{margin:0} .stats b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
-.empty{text-align:center;color:var(--muted);padding:32px 16px}
-.toast{position:fixed;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom) + 16px);max-width:608px;margin:0 auto;background:var(--fg);color:var(--bg);padding:12px 16px;border-radius:12px;font-size:15px;transform:translateY(150%);opacity:0;visibility:hidden;transition:transform .25s,opacity .25s,visibility .25s;z-index:50}
-.toast.show{transform:none;opacity:1;visibility:visible}
-/* Ziehen zum Aktualisieren */
-#ptr{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top) + 4px);display:grid;place-items:center;pointer-events:none;z-index:5;opacity:0;transition:opacity .2s}
-#ptr div{width:36px;height:36px;border-radius:18px;background:var(--card);box-shadow:0 2px 8px rgba(0,0,0,.15);display:grid;place-items:center;color:var(--acc)}
-#ptr svg{width:20px;height:20px}
-/* Detailansicht */
-#detail{position:fixed;inset:0;background:var(--bg);z-index:30;overflow-y:auto;-webkit-overflow-scrolling:touch;
-  transform:translateX(100%);transition:transform .28s ease;visibility:hidden}
-#detail.open{transform:none;visibility:visible}
-#detail .wrap{max-width:640px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 8px) 16px calc(env(safe-area-inset-bottom) + 24px)}
-.back{background:none;color:var(--acc);font-size:17px;padding:8px 0;display:inline-flex;align-items:center;gap:4px}
-.dhead h1{font-size:28px;margin-top:4px}
-.fuelgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0 12px}
-.ftile{background:var(--card);border-radius:12px;padding:10px;text-align:left;border:2px solid transparent}
-.ftile.on{border-color:var(--acc)}
-.ftile .n{font-size:13px;color:var(--muted)}
-.ftile b{display:block;font-size:22px;font-variant-numeric:tabular-nums;margin:2px 0}
-.ftile b sup{font-size:12px}
-.ftile .r{font-size:12px;color:var(--muted)}
-dialog{border:0;border-radius:16px;padding:0;width:min(560px,calc(100% - 32px));background:var(--bg);color:var(--fg)}
-dialog::backdrop{background:rgba(0,0,0,.4)}
+.hours.chg td{font-size:14px}
+.hours.chg td:nth-child(2){text-align:right;font-variant-numeric:tabular-nums;padding-right:12px}
+
+/* Dialoge */
+dialog{border:0;border-radius:20px;padding:0;width:min(560px,calc(100% - 32px));background:var(--bg);color:var(--fg)}
+dialog::backdrop{background:rgba(0,0,0,.45);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
 dialog .inner{padding:20px}
-dialog h3{margin:0 0 12px;font-size:20px}
+dialog h3{margin:0 0 12px;font-size:21px;letter-spacing:-.02em}
 label{display:block;font-size:14px;color:var(--muted);margin:14px 0 4px}
-input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg)}
-.small{font-size:13px;color:var(--muted)}
-.small a{color:var(--acc)}
+input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11px;border:1px solid var(--line);background:var(--card);color:var(--fg)}
 .actions{display:flex;gap:8px;margin-top:18px}
 .actions .btn{flex:1}
-.spin{animation:spin 1s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-/* Ortswahl */
-.locbtn{display:inline-flex;align-items:center;gap:6px;background:none;color:var(--acc);font-size:15px;font-weight:600;padding:2px 0;max-width:100%}
-.locbtn span{text-align:left}
-.locbtn svg{flex:none}
-.notice{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--muted)}
-.notice b{color:var(--fg)}
 .opt{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;background:var(--card);border-bottom:1px solid var(--line);text-align:left}
-.opt:first-child{border-radius:12px 12px 0 0} .opt:last-child{border-radius:0 0 12px 12px;border-bottom:0}
-.opt:only-child{border-radius:12px}
-.opt .ic{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;flex:none;font-weight:700;font-size:14px;color:#fff;background:var(--acc)}
-.opt .ic.gps{background:#34c759}
-.opt .ic.pl{background:#8e8e93}
-.opt .t{flex:1;min-width:0} .opt .t div:first-child{font-weight:600}
-.opt .check{color:var(--acc);font-weight:700;visibility:hidden}
+.opt:first-child{border-radius:14px 14px 0 0}.opt:last-child{border-radius:0 0 14px 14px;border-bottom:0}
+.opt:only-child{border-radius:14px}
+.opt .ic{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;flex:none;font-weight:800;font-size:14px;color:var(--on-acc);background:var(--acc)}
+.opt .ic.gps{background:#34c759;color:#fff}
+.opt .ic.pl{background:#8e8e93;color:#fff}
+.opt .t{flex:1;min-width:0}.opt .t div:first-child{font-weight:650}
+.opt .check{color:var(--acc-ink);font-weight:800;visibility:hidden}
 .opt[hidden]{display:none}
 .opt.on .check{visibility:visible}
 .optgroup{margin:6px 0 14px}
-.radius{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:12px;padding:12px 14px}
+.radius{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:14px;padding:12px 14px}
 .radius input{flex:1;accent-color:var(--acc);padding:0;border:0;background:none;height:28px}
 .radius b{min-width:52px;text-align:right;font-variant-numeric:tabular-nums}
 .search{display:flex;gap:8px}
 .search input{flex:1}
 .search .btn{padding:11px 14px}
 #dlgLoc .inner{max-height:calc(100vh - 80px);overflow-y:auto}
-.grouplabel{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:16px 4px 6px}
-/* Report-Ansicht */
+.grouplabel{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:16px 4px 6px}
+
+/* Wochenreport */
 #report{position:fixed;inset:0;background:var(--bg);z-index:40;display:none;flex-direction:column}
 #report.open{display:flex}
 #report .bar{padding:calc(env(safe-area-inset-top) + 4px) 16px 4px}
@@ -157,33 +294,46 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
 <body>
 <div id="ptr"><div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></div></div>
 
-<header>
-  <div style="min-width:0">
-    <h1>Tankpreise</h1>
-    <button class="locbtn" id="btnLoc" aria-label="Ort und Radius wählen">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
-      <span id="locLabel">Ort wählen</span>
-      <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-    </button>
-    <div class="sub" id="stand"></div>
+<header class="top">
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 40 40" aria-hidden="true">
+      <defs>
+        <linearGradient id="lgGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd84d"/><stop offset=".55" stop-color="#f5b800"/><stop offset="1" stop-color="#c88700"/></linearGradient>
+        <linearGradient id="lgBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2a2e"/><stop offset="1" stop-color="#0b0b0c"/></linearGradient>
+      </defs>
+      <rect width="40" height="40" rx="10" fill="url(#lgBg)"/>
+      <path d="M20 6.5C18.4 9.3 11.5 17.4 11.5 23.4a8.5 8.5 0 0 0 17 0C28.5 17.4 21.6 9.3 20 6.5z" fill="url(#lgGold)"/>
+      <path d="M23.1 19.6c-.6-1-1.7-1.5-3-1.5-1.8 0-3 1-3 2.3 0 3 6 1.9 6 5 0 1.5-1.3 2.5-3.2 2.5-1.5 0-2.7-.6-3.3-1.7" fill="none" stroke="#1b1300" stroke-width="2.1" stroke-linecap="round"/>
+    </svg>
+    <div class="wordmark">Schwabensprit</div>
   </div>
   <div style="display:flex;gap:8px">
     <button class="iconbtn" id="btnFetch" aria-label="Jetzt neu abrufen">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
     </button>
     <button class="iconbtn" id="btnSettings" aria-label="Einstellungen">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </button>
   </div>
 </header>
-
-<div class="seg" id="seg">
-  <button data-f="e5">Super E5</button>
-  <button data-f="e10">Super E10</button>
-  <button data-f="diesel">Diesel</button>
+<div class="locrow">
+  <button class="locbtn" id="btnLoc" aria-label="Ort und Radius wählen">
+    <svg class="lp" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+    <span id="locLabel">Ort wählen</span>
+    <svg class="cv" width="12" height="12" viewBox="0 0 12 12"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <span class="stand" id="stand"></span>
 </div>
 
-<main id="main"><div class="empty">Lade Daten …</div></main>
+<div class="sticky">
+  <div class="seg" id="seg">
+    <button data-f="e5">Super E5</button>
+    <button data-f="e10">Super E10</button>
+    <button data-f="diesel">Diesel</button>
+  </div>
+</div>
+
+<main id="main"><div class="skel" style="height:268px;margin-top:6px"></div><div class="skel" style="height:132px"></div><div class="skel" style="height:320px"></div></main>
 
 <div id="detail" aria-hidden="true"><div class="wrap" id="detailBody"></div></div>
 <div id="report"><div class="bar"><button class="back" id="btnRepBack"><svg width="12" height="20" viewBox="0 0 12 20"><path d="M10 2L2 10l8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Zurück</button></div><iframe id="repFrame" title="Wochenreport"></iframe></div>
@@ -255,6 +405,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
   let fuel = store.get("fuel", "e5");
   let onlyOpen = store.get("onlyOpen", "0") === "1";
   let sortBy = store.get("sortBy", "price");
+  let viewMode = store.get("viewMode", "list");
   // Ort: {mode: "base"|"gps"|"place", baseId?, lat?, lng?, label?}
   let loc = store.getJ("loc", { mode: "base", baseId: null });
   let radius = Number(store.get("radius", "10"));
@@ -327,7 +478,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
   function center() {
     if (loc.mode === "base") {
       const b = bases.find((x) => x.id === loc.baseId) || bases[0];
-      return b ? { lat: b.lat, lng: b.lng, label: `${b.name} · ${b.place}` } : null;
+      return b ? { lat: b.lat, lng: b.lng, label: (b.name + b.place).length <= 20 ? `${b.name} · ${b.place}` : b.name } : null;
     }
     return loc.lat != null ? { lat: loc.lat, lng: loc.lng, label: loc.label } : null;
   }
@@ -434,6 +585,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
 
   // Lädt alles für den aktuellen Ort und baut die Ansicht
   async function load(force = false) {
+    if (view && !view.error) $("#main").classList.add("busy");
     try {
       if (!bases.length || force) await loadBases();
     } catch (e) {
@@ -549,7 +701,6 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
     };
   }
   // Preisänderungen: changes.json enthält je Tankstelle/Sorte [Minuten seit start, Δ in 1/1000 €, …]
-  const qlabel = (q) => { const a = q * 15, b = a + 15, f = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; return `${f(a)}–${f(b)}`; };
   function stationEvents(chg, id, f) {
     const arr = chg?.stations?.[id]?.[f] || [], t0 = new Date(chg?.start).getTime(), out = [];
     for (let i = 0; i < arr.length; i += 2) out.push({ t: new Date(t0 + arr[i] * 60000), d: arr[i + 1] / 1000 });
@@ -575,13 +726,52 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
     return { up, down, n, topUp: top(upQ), topDown: top(downQ), avgUp: mean(ups), avgDown: mean(downs),
       perDay: n / Math.max(withData, 1) / days };
   }
-  function changeCard(c, title) {
+  // ---- Bausteine der Darstellung
+  const median = (a) => {
+    if (!a.length) return null;
+    const s = [...a].sort((x, y) => x - y), m = s.length >> 1;
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  };
+  // Preisniveau je Sorte: blau = günstig, grau = mittel, rot = teuer (±1 ct um den Median im Umkreis)
+  function levelFn(f = fuel) {
+    const med = median((view?.stations || []).filter((s) => hasPrice(s, f)).map((s) => s[f]));
+    return (s) => !hasPrice(s, f) || med == null ? "off" : s[f] <= med - 0.0095 ? "lo" : s[f] >= med + 0.0095 ? "hi" : "mid";
+  }
+  const initials = (b) => {
+    const w = String(b || "").replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(" ").filter(Boolean);
+    if (!w.length) return "?";
+    return (w.length > 1 ? w[0][0] + w[1][0] : w[0].length <= 3 ? w[0] : w[0][0]).toUpperCase();
+  };
+  const badge = (s, lv = "mid", cls = "") => {
+    const t = initials(s?.brand);
+    return `<div class="badge lv-${lv}${t.length > 2 ? " t3" : ""}${cls ? " " + cls : ""}" aria-hidden="true">${esc(t)}</div>`;
+  };
+  const pill = (d, text, cls = "") => `<span class="pill ${d < -0.0005 ? "lo" : d > 0.0005 ? "hi" : ""} ${cls}"><i></i>${text}</span>`;
+  const eur2 = (v) => v.toFixed(2).replace(".", ",") + " €";
+  const dayLabel = (t) => new Date(t).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
+  const CLOCK = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`;
+  const LV_LEGEND = `<div class="lvlegend"><span><i style="background:var(--lo)"></i>günstig</span><span><i style="background:var(--mid)"></i>mittel</span><span><i style="background:var(--hi)"></i>teuer</span><span>± 1 ct zum Median</span></div>`;
+  // Jede Grafik bekommt eine Tabelle als gleichwertige Alternative
+  const tbl = (head, rows) => rows.length ? `<details class="tbl"><summary>Werte als Tabelle</summary><table><tr>${head.map((x) => `<th>${x}</th>`).join("")}</tr>${rows.map((r) => `<tr>${r.map((x) => `<td>${x}</td>`).join("")}</tr>`).join("")}</table></details>` : "";
+  const dailyRows = (pts) => {
+    const days = {};
+    pts.forEach(([t, v]) => { (days[new Date(t).toDateString()] ||= { t, vs: [] }).vs.push(v); });
+    return Object.values(days).map(({ t, vs }) => [dayLabel(t), eur(mean(vs)), eur(Math.min(...vs)), eur(Math.max(...vs))]);
+  };
+
+  const qstart = (q) => `${Math.floor(q / 4)}:${String((q % 4) * 15).padStart(2, "0")}`;
+  const joinDe = (a) => a.length > 1 ? `${a.slice(0, -1).join(", ")} und ${a[a.length - 1]}` : a.join("");
+  function changeCard(c, title, sub) {
     if (!c || c.n < 5) return "";
-    return `<div class="card"><div class="sub" style="margin-bottom:6px">${title}</div>${upDownChart(c.up, c.down)}
-      <div class="legend"><span><i style="border-color:var(--bad)"></i>Erhöhungen</span><span><i style="border-color:var(--good)"></i>Senkungen</span></div>
-      <div class="sub" style="margin-top:8px">${c.topUp.length ? `<b style="color:var(--bad)">Erhöhungen</b> meist ${c.topUp.map(qlabel).join(", ")} Uhr${c.avgUp ? ` (Ø ${ct(c.avgUp)})` : ""}.<br>` : ""}
-        ${c.topDown.length ? `<b style="color:var(--good)">Senkungen</b> meist ${c.topDown.map(qlabel).join(", ")} Uhr${c.avgDown ? ` (Ø ${ct(c.avgDown)})` : ""}.<br>` : ""}
-        ${c.n} Änderungen beobachtet · Ø ${c.perDay.toFixed(1).replace(".", ",")} pro Tankstelle und Tag</div></div>`;
+    const rows = c.up.map((u, h) => [`${h}–${h + 1} Uhr`, u, c.down[h]]).filter((r) => r[1] || r[2]);
+    return `<div class="card chartcard"><div class="t">${title}</div><div class="s">${sub}</div>${upDownChart(c.up, c.down)}
+      <div class="legend"><span><i class="kr" style="background:var(--hi)"></i>Erhöhungen</span><span><i class="kr" style="background:var(--lo)"></i>Senkungen</span></div>
+      <div class="facts">
+        ${c.topUp.length ? `<div><span class="arw hi">▲</span> Erhöhungen meist <b>${joinDe(c.topUp.map(qstart))} Uhr</b>${c.avgUp ? ` · Ø ${ct(c.avgUp)}` : ""}</div>` : ""}
+        ${c.topDown.length ? `<div><span class="arw lo">▼</span> Senkungen meist <b>${joinDe(c.topDown.map(qstart))} Uhr</b>${c.avgDown ? ` · Ø ${ct(c.avgDown)}` : ""}</div>` : ""}
+        <div class="sub">Jeweils die Viertelstunde ab der genannten Uhrzeit · ${c.n} Änderungen beobachtet · Ø ${c.perDay.toFixed(1).replace(".", ",")} pro Tankstelle und Tag</div>
+      </div>
+      ${tbl(["Uhrzeit", "▲ Erhöhungen", "▼ Senkungen"], rows)}</div>`;
   }
 
   const labelOf = (id) => { const s = byId(id); return s ? `${s.brand}, ${s.place}` : "Tankstelle"; };
@@ -591,114 +781,141 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
     document.querySelectorAll("#seg button").forEach((b) => b.classList.toggle("on", b.dataset.f === fuel));
     const c = view?.center;
     $("#locLabel").textContent = c ? `${c.label} · ${radius} km` : "Ort wählen";
-    $("#stand").textContent = view?.updated ? `${view.live ? "Live · " : ""}Stand ${ago(view.updated)}` : "";
+    const st = $("#stand");
+    if (view?.updated) {
+      const age = (Date.now() - new Date(view.updated)) / 60000;
+      st.className = "stand" + (age < 20 ? " fresh" : age > 120 ? " old" : "");
+      st.innerHTML = `<i></i>${view.live ? "Live · " : ""}Stand ${esc(ago(view.updated))}`;
+    } else st.innerHTML = "";
     const main = $("#main");
+    main.classList.remove("busy");
     if (!view) return;
     if (view.error) {
       main.innerHTML = view.error.setup
-        ? `<div class="card empty">Die App ist noch nicht eingerichtet.<br>Tippe auf ⚙ und trage deinen GitHub-Zugangsschlüssel ein.<div class="row" style="justify-content:center"><button class="btn" id="btnSetup">Einrichten</button></div></div>`
-        : `<div class="card empty">Daten konnten nicht geladen werden (${esc(view.error.message)}).<br>Zum Neuladen nach unten ziehen.</div>`;
+        ? `<div class="card empty"><div class="bigic">🔑</div><b>Noch nicht eingerichtet</b><p>Trage deinen GitHub-Zugangsschlüssel ein, dann erscheinen hier die Preise.</p><button class="btn" id="btnSetup">Einrichten</button></div>`
+        : `<div class="card empty"><div class="bigic">⚠️</div><b>Daten konnten nicht geladen werden</b><p>${esc(view.error.message)} – zum Neuladen nach unten ziehen.</p></div>`;
       return;
     }
     let h = "";
     if (view.src.type === "partial")
-      h += `<div class="card notice">ℹ️<div><b>Teilweise außerhalb deiner Bases.</b> Es werden nur Tankstellen aus ${esc(view.base.name)} angezeigt. Für vollständige Live-Preise trage unter ⚙ deinen Tankerkönig-Schlüssel ein.</div></div>`;
+      h += `<div class="card notice"><span class="ic">ℹ️</span><div><b>Teilweise außerhalb deiner Bases.</b> Es werden nur Tankstellen aus ${esc(view.base.name)} angezeigt. Für vollständige Live-Preise trage unter ⚙ deinen Tankerkönig-Schlüssel ein.</div></div>`;
     if (view.src.type === "none")
-      h += `<div class="card notice">ℹ️<div><b>Dieser Ort liegt außerhalb deiner Bases.</b> Für Live-Preise trage unter ⚙ deinen Tankerkönig-Schlüssel ein.</div></div>`;
+      h += `<div class="card notice"><span class="ic">ℹ️</span><div><b>Dieser Ort liegt außerhalb deiner Bases.</b> Für Live-Preise trage unter ⚙ deinen Tankerkönig-Schlüssel ein.</div></div>`;
 
+    const lv = levelFn();
     const withPrice = view.stations.filter((s) => hasPrice(s)).sort((a, b) => a[fuel] - b[fuel] || a.dist - b.dist);
     const others = view.stations.filter((s) => !hasPrice(s)).sort((a, b) => a.dist - b.dist);
     const best = withPrice[0];
     const avgNow = mean(withPrice.map((s) => s[fuel]));
 
     if (best) {
-      const stt = state(best);
-      h += `<div class="card hero">
-        <div class="label">Am günstigsten gerade · ${FUELS[fuel]}</div>
-        <div class="price">${price(best[fuel])} €</div>
-        <div class="where">${esc(best.brand)} · ${esc(best.place)}</div>
-        <div class="sub">${esc(best.street)} · ${km(best.dist)}${stt.text ? " · " + stt.text : ""}</div>
+      const stt = state(best), save = avgNow - best[fuel];
+      h += `<section class="card hero">
+        <span class="eyebrow">Günstigste · ${FUELS[fuel]} · ${radius} km</span>
+        <div class="pricerow"><div class="price">${price(best[fuel])}<span class="cur">€</span></div>
+          ${withPrice.length > 1 && save > 0.0005 ? `<div class="save"><span class="eyebrow">Ersparnis</span><b>${eur2(save * 50)}</b><span>bei 50 l ggü. Ø</span></div>` : ""}</div>
+        <div class="station">${badge(best, lv(best), "lg")}
+          <div style="min-width:0"><div class="where">${esc(best.brand)} · ${esc(best.place)}</div>
+          <div class="sub">${esc(best.street)} · ${km(best.dist)}${stt.short ? " · " + esc(stt.short) : ""}</div></div></div>
         <div class="row" id="heroPills">
-          ${withPrice.length > 1 ? `<span class="pill good">${ct(best[fuel] - avgNow)} unter Ø im Umkreis</span>` : ""}
+          ${withPrice.length > 1 && save > 0.0005 ? pill(-save, `${ct(-save)} unter Ø`) : ""}
         </div>
         <div class="row two">
           <button class="btn" data-route="${esc(best.id)}">${NAV} Route</button>
           <button class="btn secondary" data-detail="${esc(best.id)}">Details</button>
         </div>
-      </div>`;
+      </section>`;
     } else if (view.src.type !== "none") {
-      h += `<div class="card empty">Im Umkreis von ${radius} km ist gerade keine Tankstelle mit ${FUELS[fuel]} geöffnet.</div>`;
+      h += `<div class="card empty"><div class="bigic">🌙</div><b>Gerade alles zu</b><p>Im Umkreis von ${radius} km ist keine Tankstelle mit ${FUELS[fuel]} geöffnet.</p></div>`;
     }
     h += `<div id="tip"></div>`;
 
-    let list = [...withPrice, ...(onlyOpen ? [] : others)];
-    if (sortBy === "dist") list = [...list].sort((a, b) => a.dist - b.dist);
     if (view.stations.length) {
-      h += `<h2>Tankstellen <span class="sub">${withPrice.length} von ${view.stations.length} mit Preis</span></h2>
+      h += `<div class="sec"><h2>Tankstellen</h2>
+        <div class="seg mini"><button data-view="list" class="${viewMode === "list" ? "on" : ""}">Liste</button><button data-view="map" class="${viewMode === "map" ? "on" : ""}">Karte</button></div></div>
         <div class="chips">
-          <button class="chip ${sortBy === "price" ? "on" : ""}" data-sort="price">Nach Preis</button>
-          <button class="chip ${sortBy === "dist" ? "on" : ""}" data-sort="dist">Nach Entfernung</button>
+          ${viewMode === "list" ? `<button class="chip ${sortBy === "price" ? "on" : ""}" data-sort="price">Nach Preis</button>
+          <button class="chip ${sortBy === "dist" ? "on" : ""}" data-sort="dist">Nach Entfernung</button>` : ""}
           <button class="chip ${onlyOpen ? "on" : ""}" data-open>Nur geöffnete</button>
-        </div><div class="list">`;
-      for (const s of list.slice(0, 60)) {
-        const has = hasPrice(s), stt = state(s);
-        const d = has && best ? s[fuel] - best[fuel] : null;
-        h += `<button class="item ${has ? "" : "closed"} ${s === best ? "best" : ""}" data-detail="${esc(s.id)}">
-          <div class="info"><div class="name">${esc(s.brand)}${stt.open && stt.short ? ` <span class="hrs">· ${esc(stt.short)}</span>` : ""}</div>
-            <div class="addr">${km(s.dist)} · ${esc(s.place)}, ${esc(s.street)}</div></div>
-          <div class="p">${has ? `<b>${price(s[fuel])}</b><div class="d">${d ? ct(d) : "günstigste"}</div>` : `<div class="d">${stt.open ? "kein " + FUELS[fuel] : "geschlossen"}${!stt.open && stt.short ? "<br>" + esc(stt.short) : ""}</div>`}</div>
-          ${CHEV}</button>`;
+        </div>${LV_LEGEND}`;
+      if (viewMode === "map") {
+        h += `<div class="card mapcard" id="mapslot"></div>`;
+      } else {
+        let list = [...withPrice, ...(onlyOpen ? [] : others)];
+        if (sortBy === "dist") list = [...list].sort((a, b) => a.dist - b.dist);
+        h += `<div class="list">`;
+        for (const s of list.slice(0, 60)) {
+          const has = hasPrice(s), stt = state(s);
+          const d = has && best ? s[fuel] - best[fuel] : null;
+          h += `<button class="item${has ? "" : " closed"}" data-detail="${esc(s.id)}">
+            ${badge(s, lv(s))}
+            <div class="info"><div class="name"><span>${esc(s.brand)}</span>${stt.open && stt.short ? `<span class="tag">${esc(stt.short)}</span>` : ""}</div>
+              <div class="addr">${km(s.dist)} · ${esc(s.place)}, ${esc(s.street)}</div></div>
+            <div class="p">${has ? `<b>${price(s[fuel])}</b><div class="d">${d ? ct(d) : "günstigste"}</div>` : `<div class="d">${stt.open ? "kein " + FUELS[fuel] : "geschlossen"}${!stt.open && stt.short ? "<br>" + esc(stt.short) : ""}</div>`}</div>
+            ${CHEV}</button>`;
+        }
+        if (list.length > 60) h += `<div class="more">… und ${list.length - 60} weitere. Radius verkleinern oder Karte nutzen.</div>`;
+        if (!list.length) h += `<div class="empty">Gerade hat keine Tankstelle geöffnet.</div>`;
+        h += `</div>`;
       }
-      if (list.length > 60) h += `<div class="empty" style="padding:14px">… und ${list.length - 60} weitere. Radius verkleinern für eine kürzere Liste.</div>`;
-      if (!list.length) h += `<div class="empty">Gerade hat keine Tankstelle geöffnet.</div>`;
-      h += `</div>`;
     }
     h += `<div id="analysis"></div>`;
     if (view.reports?.length) {
-      h += `<h2>Wochenreports <span class="sub">${esc(view.base.name)}</span></h2><div class="list">` + view.reports.map((r) =>
-        `<button class="item" data-report="${esc(r.file)}"><div class="info"><div class="name">${esc(r.title)}</div></div>${CHEV}</button>`).join("") + `</div>`;
+      h += `<div class="sec"><h2>Wochenreports</h2><span class="sub">${esc(view.base.name)}</span></div><div class="list">` + view.reports.map((r) =>
+        `<button class="item" data-report="${esc(r.file)}"><div class="badge rank">📊</div><div class="info"><div class="name"><span>${esc(r.title)}</span></div></div>${CHEV}</button>`).join("") + `</div>`;
     }
-    h += `<p class="sub" style="text-align:center;margin-top:24px">Daten: Tankerkönig / MTS-K (CC BY 4.0)</p>`;
+    h += `<p class="foot">Schwabensprit · Daten: Tankerkönig / MTS-K (CC BY 4.0)</p>`;
     main.innerHTML = h;
+    if (viewMode === "map" && view.stations.length) mountMap();
     renderAnalysis();
   }
 
   function renderAnalysis() {
     if (!view || view.error || !$("#analysis")) return;
-    const hist = view.base && baseCache[view.base.id]?.history;
     if (view.live) {
-      $("#analysis").innerHTML = `<div class="card notice" style="margin-top:12px">📈<div>Verlauf, beste Tankzeit und Wochenreports gibt es für Orte innerhalb von ${bases.map((b) => esc(b.name)).join(" und ")}.</div></div>`;
+      $("#analysis").innerHTML = `<div class="card notice" style="margin-top:12px"><span class="ic">📈</span><div>Verlauf, beste Tankzeit und Wochenreports gibt es für Orte innerhalb von ${bases.map((b) => esc(b.name)).join(", ")}.</div></div>`;
       return;
     }
-    if (!hist) { $("#analysis").innerHTML = ""; return; }
-    const sum = analyse(hist, view.stations.map((s) => s.id), fuel);
+    const cache = view.base && baseCache[view.base.id];
+    if (!cache?.history) { $("#analysis").innerHTML = `<div class="skel" style="height:220px;margin-top:28px"></div>`; return; }
+    const ids = view.stations.map((s) => s.id);
+    const sum = analyse(cache.history, ids, fuel);
     if (!sum) { $("#analysis").innerHTML = ""; return; }
-    if (sum.trend != null && $("#heroPills"))
-      $("#heroPills").insertAdjacentHTML("beforeend", `<span class="pill ${sum.trend > 0 ? "bad" : "good"}">Woche ${ct(sum.trend)}</span>`);
+    if (sum.trend != null && $("#heroPills") && !$("#heroPills .trend"))
+      $("#heroPills").insertAdjacentHTML("beforeend", pill(sum.trend, `Woche ${ct(sum.trend)}`, "trend"));
     if (sum.days > 1) {
       const hNow = new Date().getHours(), devNow = sum.hourAvg[hNow], bh = sum.bestHour;
       let verdict = "";
-      if (devNow != null) verdict = devNow <= sum.hourAvg[bh] + 0.01 ? "Jetzt ist eine gute Zeit zum Tanken."
-        : devNow > 0.01 ? `Jetzt (${hNow} Uhr) ist es typischerweise ${ct(devNow)} teurer als im Tagesmittel – wenn möglich warten.`
+      if (devNow != null) verdict = devNow <= sum.hourAvg[bh] + 0.01 ? "<b>Jetzt ist eine gute Zeit zum Tanken.</b>"
+        : devNow > 0.01 ? `Jetzt (${hNow} Uhr) ist es typischerweise <b>${ct(devNow)} teurer</b> als im Tagesmittel – wenn möglich warten.`
         : `Jetzt (${hNow} Uhr) liegt der Preis meist etwa im Tagesmittel.`;
-      $("#tip").innerHTML = `<div class="card tip"><div class="emoji">💡</div><div>
-        <b>Beste Tankzeit: ${bh}–${bh + 1} Uhr</b> (${ct(sum.hourAvg[bh])} ggü. Tagesmittel)<br>
-        <span class="sub">${verdict} Am teuersten: ${sum.worstHour}–${sum.worstHour + 1} Uhr.
-        ${sum.bestWd != null ? `Günstigster Wochentag: ${WD[sum.bestWd]}.` : ""}</span></div></div>`;
+      $("#tip").innerHTML = `<section class="card">
+        <div class="tiphead"><div class="ic">${CLOCK}</div><div><b>Beste Tankzeit: ${bh}–${bh + 1} Uhr</b>
+          <div class="sub">${ct(sum.hourAvg[bh])} ggü. Tagesmittel · am teuersten ${sum.worstHour}–${sum.worstHour + 1} Uhr</div></div></div>
+        ${stripChart(sum.hourAvg)}
+        <div class="legend" style="margin-top:6px"><span><i class="kr" style="background:var(--lo)"></i>günstiger</span><span><i class="kr" style="background:var(--hi)"></i>teurer</span><span>▼ jetzt</span></div>
+        <p class="verdict">${verdict}${sum.bestWd != null ? ` Günstigster Wochentag: ${WD[sum.bestWd]}.` : ""}</p>
+      </section>`;
     }
-    let h = `<h2>${sum.days >= 6 ? "Letzte 7 Tage" : "Bisher gesammelt"} <span class="sub">${radius} km</span></h2>
+    let h = `<div class="sec"><h2>${sum.days >= 6 ? "Letzte 7 Tage" : "Bisher gesammelt"}</h2><span class="sub">${FUELS[fuel]} · ${radius} km</span></div>
       <div class="stats">
-        <div class="card"><span class="sub">Ø Preis</span><b>${eur(sum.mean)}</b></div>
-        <div class="card"><span class="sub">Tiefstpreis</span><b style="color:var(--good)">${eur(sum.lo.v)}</b>
-          <span class="sub">${esc(labelOf(sum.lo.id))}</span></div>
+        <div class="card stat"><span class="eyebrow">Ø Preis</span><span class="v">${eur(sum.mean)}</span>${sum.trend != null ? pill(sum.trend, `${ct(sum.trend)} ggü. Vorwoche`) : ""}</div>
+        <div class="card stat"><span class="eyebrow">Tiefstpreis</span><span class="v">${eur(sum.lo.v)}</span><span class="sub">${esc(labelOf(sum.lo.id))} · ${esc(fmtTime(sum.lo.t))}</span></div>
       </div>
-      <div class="card"><div class="sub" style="margin-bottom:6px">Durchschnittspreis im Verlauf</div>${lineChart(sum.series)}</div>`;
-    if (sum.days > 1) h += `<div class="card"><div class="sub" style="margin-bottom:6px">Abweichung nach Uhrzeit (grün = günstiger)</div>${hourChart(sum.hourAvg, sum.bestHour)}</div>`;
-    h += changeCard(changeStats(baseCache[view.base.id]?.changes, view.stations.map((s) => s.id), fuel), "Wann ändern sich die Preise? (Anzahl je Uhrzeit)");
-    h += `<h2>Günstigste im Schnitt</h2><div class="list">` + sum.ranking.slice(0, 5).map((r, i) => {
+      <div class="card chartcard"><div class="t">Durchschnittspreis</div><div class="s">Alle Tankstellen im Umkreis, stündlich</div>
+        ${lineChart([{ name: "Ø im Umkreis", pts: sum.series }])}
+        ${tbl(["Tag", "Ø", "Tief", "Hoch"], dailyRows(sum.series))}</div>`;
+    if (sum.days > 1) {
+      h += `<div class="card chartcard"><div class="t">Preis nach Uhrzeit</div><div class="s">Abweichung vom Tagesmittel der jeweiligen Tankstelle</div>
+        ${devBars(sum.hourAvg, sum.bestHour)}
+        <div class="legend"><span><i class="kr" style="background:var(--lo)"></i>günstiger</span><span><i class="kr" style="background:var(--hi)"></i>teurer</span><span>▼ jetzt</span></div>
+        ${tbl(["Uhrzeit", "Abweichung"], Object.keys(sum.hourAvg).map(Number).sort((a, b) => a - b).map((hh) => [`${hh}–${hh + 1} Uhr`, ct(sum.hourAvg[hh])]))}</div>`;
+    }
+    h += changeCard(changeStats(cache.changes, ids, fuel), "Wann ändern sich die Preise?", "Anzahl der Erhöhungen und Senkungen je Uhrzeit");
+    h += `<div class="sec"><h2>Günstigste im Schnitt</h2><span class="sub">Ø der Woche</span></div><div class="list">` + sum.ranking.slice(0, 5).map((r, i) => {
       const s = byId(r.id);
-      return `<button class="item" data-detail="${esc(r.id)}"><div class="info">
-        <div class="name">${i + 1}. ${esc(s?.brand ?? "Tankstelle")}</div><div class="addr">${km(s?.dist)} · ${esc(s?.place ?? "")}, ${esc(s?.street ?? "")}</div></div>
+      return `<button class="item" data-detail="${esc(r.id)}"><div class="badge rank">${i + 1}</div><div class="info">
+        <div class="name"><span>${esc(s?.brand ?? "Tankstelle")}</span></div><div class="addr">${km(s?.dist)} · ${esc(s?.place ?? "")}, ${esc(s?.street ?? "")}</div></div>
         <div class="p"><b>${price(r.mean)}</b><div class="d">Ø Woche</div></div>${CHEV}</button>`;
     }).join("") + `</div>`;
     $("#analysis").innerHTML = h;
@@ -727,29 +944,29 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
     const s = byId(detailId);
     if (!s) return;
     if (view.live && !s.hours && store.get("tk", "")) liveHours(s).then((h) => { s.hours = h; if (detailId === s.id) renderDetail(); }).catch(() => {});
+    const stt = state(s);
     const tiles = Object.keys(FUELS).map((f) => {
       const all = view.stations.filter((x) => hasPrice(x, f)).sort((a, b) => a[f] - b[f]);
       const rank = all.findIndex((x) => x.id === s.id) + 1;
-      return `<button class="ftile ${f === fuel ? "on" : ""}" data-fuel="${f}"><div class="n">${FUELS[f]}</div>
+      return `<button class="ftile ${f === fuel ? "on" : ""}" data-fuel="${f}"><div class="n"><i class="${levelFn(f)(s)}"></i>${FUELS[f]}</div>
         <b>${hasPrice(s, f) ? price(s[f]) : "–"}</b>
-        <div class="r">${rank ? `Platz ${rank}/${all.length}` : state(s).open ? "nicht angeboten" : "geschlossen"}</div></button>`;
+        <div class="r">${rank ? `Platz ${rank}/${all.length}` : stt.open ? "nicht angeboten" : "geschlossen"}</div></button>`;
     }).join("");
     const all = view.stations.filter((x) => hasPrice(x));
     const diffNow = hasPrice(s) ? s[fuel] - mean(all.map((x) => x[fuel])) : null;
-    const stt = state(s);
     $("#detailBody").innerHTML = `
       <button class="back" id="btnBack"><svg width="12" height="20" viewBox="0 0 12 20"><path d="M10 2L2 10l8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Zurück</button>
-      <div class="dhead"><h1>${esc(s.brand)}</h1>
-        <div class="sub">${esc(s.street)}, ${esc(s.place)} · ${km(s.dist)} entfernt</div>
-        <div class="row" style="margin-top:8px">
-          <span class="pill ${stt.open ? "good" : "neutral"}">${stt.open ? "Geöffnet" : "Geschlossen"}${stt.text ? " · " + esc(stt.text.replace(/^geöffnet /, "")) : ""}</span>
-          ${diffNow != null && all.length > 1 ? `<span class="pill ${diffNow > 0.0005 ? "bad" : "good"}">${ct(diffNow)} ggü. Ø jetzt</span>` : ""}
-        </div></div>
+      <div class="dhead">${badge(s, levelFn()(s), "xl")}
+        <div style="min-width:0"><h1>${esc(s.brand)}</h1><div class="sub">${esc(s.street)}, ${esc(s.place)} · ${km(s.dist)}</div></div></div>
+      <div class="row">
+        <span class="pill ${stt.open ? "ok" : ""}"><i></i>${stt.open ? "Geöffnet" : "Geschlossen"}${stt.text ? " · " + esc(stt.text.replace(/^geöffnet /, "")) : ""}</span>
+        ${diffNow != null && all.length > 1 ? pill(diffNow, `${ct(diffNow)} ggü. Ø jetzt`) : ""}
+      </div>
       <div class="fuelgrid">${tiles}</div>
       <button class="btn block" data-route="${esc(s.id)}">${NAV} Route mit Google Maps</button>
       ${hoursCard(s)}
-      <div id="dstats">${view.live ? "" : `<div class="empty">Lade Verlauf …</div>`}</div>
-      <p class="sub" style="text-align:center;margin-top:24px">Stand ${ago(view.updated)}</p>`;
+      <div id="dstats">${view.live ? "" : `<div class="skel" style="height:220px;margin-top:28px"></div>`}</div>
+      <p class="foot">Stand ${esc(ago(view.updated))}</p>`;
     if (view.live) return;
 
     const hist = await loadHistory();
@@ -769,7 +986,6 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
       const regMean = mean(pts.map((p) => regAvg[ts.indexOf(p[0])]).filter((v) => v != null && !Number.isNaN(v)));
       const lo = Math.min(...vals), hi = Math.max(...vals);
       const loAt = pts.find((p) => p[1] === lo)[0];
-      let changes = 0; for (let i = 1; i < vals.length; i++) if (Math.abs(vals[i] - vals[i - 1]) > 1e-9) changes++;
       const days = {};
       pts.forEach(([t, v]) => { const k = new Date(t).toDateString(); (days[k] ||= []).push(v); });
       const dayMean = Object.fromEntries(Object.entries(days).map(([k, a]) => [k, mean(a)]));
@@ -779,34 +995,35 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
       const hours = Object.keys(hourAvg).map(Number);
       const bestH = hours.length ? hours.reduce((a, b) => hourAvg[a] <= hourAvg[b] ? a : b) : null;
       const span = (pts[pts.length - 1][0] - pts[0][0]) / 864e5;
-      h += `<h2>${FUELS[fuel]} · ${span >= 6 ? "letzte 7 Tage" : "bisher gesammelt"}</h2>
+      const nChg = stationEvents(baseCache[view.base.id]?.changes, s.id, fuel).length;
+      h += `<div class="sec"><h2>${FUELS[fuel]}</h2><span class="sub">${span >= 6 ? "letzte 7 Tage" : "bisher gesammelt"}</span></div>
         <div class="stats">
-          <div class="card"><span class="sub">Ø Preis hier</span><b>${eur(avg)}</b>
-            <span class="pill ${avg - regMean > 0.0005 ? "bad" : "good"}">${ct(avg - regMean)} ggü. Ø</span></div>
-          <div class="card"><span class="sub">Tiefstpreis</span><b style="color:var(--good)">${eur(lo)}</b>
-            <span class="sub">${fmtTime(new Date(loAt))}</span></div>
-          <div class="card"><span class="sub">Höchstpreis</span><b style="color:var(--bad)">${eur(hi)}</b>
-            <span class="sub">${hi - lo < 0.0005 ? "Preis unverändert" : "Spanne " + ct(hi - lo).replace("+", "")}</span></div>
-          <div class="card"><span class="sub">Günstigste Uhrzeit</span><b>${bestH != null && Object.keys(days).length > 1 ? `${bestH}–${bestH + 1} Uhr` : "–"}</b>
-            <span class="sub">${changes} Preisänderungen beobachtet</span></div>
+          <div class="card stat"><span class="eyebrow">Ø Preis hier</span><span class="v">${eur(avg)}</span>${pill(avg - regMean, `${ct(avg - regMean)} ggü. Ø`)}</div>
+          <div class="card stat"><span class="eyebrow">Tiefstpreis</span><span class="v">${eur(lo)}</span><span class="sub">${esc(fmtTime(new Date(loAt)))}</span></div>
+          <div class="card stat"><span class="eyebrow">Höchstpreis</span><span class="v">${eur(hi)}</span><span class="sub">${hi - lo < 0.0005 ? "Preis unverändert" : "Spanne " + ct(hi - lo).replace("+", "")}</span></div>
+          <div class="card stat"><span class="eyebrow">Günstigste Zeit</span><span class="v">${bestH != null && Object.keys(days).length > 1 ? `${bestH}–${bestH + 1} Uhr` : "–"}</span><span class="sub">${nChg} Preisänderungen</span></div>
         </div>
-        <div class="card"><div class="sub" style="margin-bottom:6px">Preisverlauf</div>
-          ${lineChart(pts, regPts)}
-          <div class="legend"><span><i></i>${esc(s.brand)}</span><span><i class="dash"></i>Ø Umkreis</span></div></div>`;
+        <div class="card chartcard"><div class="t">Preisverlauf</div><div class="s">${esc(s.brand)} im Vergleich zum Ø im Umkreis</div>
+          ${lineChart([{ name: s.brand, pts }, { name: "Ø Umkreis", cls: "ref", pts: regPts }])}
+          <div class="legend"><span><i class="k"></i>${esc(s.brand)}</span><span><i class="k ref"></i>Ø Umkreis</span></div>
+          ${tbl(["Tag", "Ø", "Tief", "Hoch"], dailyRows(pts))}</div>`;
       if (Object.keys(days).length > 1)
-        h += `<div class="card"><div class="sub" style="margin-bottom:6px">Abweichung nach Uhrzeit an dieser Tankstelle</div>${hourChart(hourAvg, bestH)}</div>`;
+        h += `<div class="card chartcard"><div class="t">Preis nach Uhrzeit</div><div class="s">Abweichung vom Tagesmittel dieser Tankstelle</div>
+          ${devBars(hourAvg, bestH)}
+          <div class="legend"><span><i class="kr" style="background:var(--lo)"></i>günstiger</span><span><i class="kr" style="background:var(--hi)"></i>teurer</span><span>▼ jetzt</span></div>
+          ${tbl(["Uhrzeit", "Abweichung"], hours.sort((a, b) => a - b).map((hh) => [`${hh}–${hh + 1} Uhr`, ct(hourAvg[hh])]))}</div>`;
     }
     // Preisänderungen dieser Tankstelle (Preis nach der Änderung rückwärts ab dem aktuellen Preis)
     const chg = baseCache[view.base.id]?.changes, ev = stationEvents(chg, s.id, fuel);
     if (ev.length) {
-      h += changeCard(changeStats(chg, [s.id], fuel), "Wann ändert diese Tankstelle ihre Preise?");
+      h += changeCard(changeStats(chg, [s.id], fuel), "Wann ändert diese Tankstelle ihre Preise?", "Anzahl je Uhrzeit, letzte 7 Tage");
       let p = s[fuel];
       const rows = ev.slice().reverse().slice(0, 10).map((e) => {
-        const r = `<tr><td>${fmtTime(e.t)}</td><td style="color:var(${e.d > 0 ? "--bad" : "--good"})">${ct(e.d)}</td><td>${p != null ? eur(p) : ""}</td></tr>`;
+        const r = `<tr><td>ca. ${esc(fmtTime(new Date(Math.round(e.t / 3e5) * 3e5)))}</td><td><span class="arw ${e.d > 0 ? "hi" : "lo"}">${e.d > 0 ? "▲" : "▼"}</span> ${ct(e.d)}</td><td>${p != null ? eur(p) : ""}</td></tr>`;
         if (p != null) p -= e.d;
         return r;
       }).join("");
-      h += `<h2>Letzte Preisänderungen <span class="sub">${FUELS[fuel]}</span></h2><div class="card"><table class="hours">${rows}</table></div>`;
+      h += `<div class="sec"><h2>Letzte Preisänderungen</h2><span class="sub">${FUELS[fuel]}</span></div><div class="card"><table class="hours chg">${rows}</table></div>`;
     }
     $("#dstats").innerHTML = h;
   }
@@ -814,7 +1031,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
   function hoursCard(s) {
     const H = s.hours;
     let body;
-    if (!H) body = `<div class="sub">${view.live ? (store.get("tk", "") ? "Öffnungszeiten werden geladen …" : "Keine Öffnungszeiten verfügbar.") : "Die Öffnungszeiten werden beim nächsten Abruf geladen."}</div>`;
+    if (!H) body = `<div class="sub">${view.live ? (store.get("tk", "") ? "Öffnungszeiten werden geladen …" : "Keine Öffnungszeiten verfügbar.") : "Die Öffnungszeiten werden in den nächsten Stunden geladen."}</div>`;
     else if (H.wholeDay) body = `<div><b>Durchgehend geöffnet</b> – 24 Stunden, 7 Tage.</div>`;
     else if (!H.slots?.length) body = `<div class="sub">Keine Öffnungszeiten hinterlegt.</div>`;
     else {
@@ -825,7 +1042,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
       }).join("") + `</table>`;
       if (H.overrides?.length) body += `<div class="sub" style="margin-top:10px"><b>Abweichende Zeiten:</b><br>${H.overrides.map(esc).join("<br>")}</div>`;
     }
-    return `<h2>Öffnungszeiten</h2><div class="card">${body}</div>`;
+    return `<div class="sec"><h2>Öffnungszeiten</h2></div><div class="card">${body}</div>`;
   }
 
   // ---- Wochenreport anzeigen (funktioniert auch bei privatem Repository)
@@ -840,69 +1057,271 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
   function closeReport() { $("#report").classList.remove("open"); }
   $("#btnRepBack").addEventListener("click", () => { closeReport(); try { window.history.back(); } catch {} });
 
-  // ---- Diagramme
-  function lineChart(pts, ref) {
-    if (!pts || pts.length < 2) return `<div class="sub">Noch zu wenige Daten.</div>`;
-    const W = 340, H = 150, L = 38, R = 6, T = 8, B = 20;
-    const all = [...pts, ...(ref || [])];
+  // ---- Kartenansicht (Leaflet + CARTO-Kacheln, wird erst beim ersten Öffnen geladen)
+  const LEAFLET = {
+    js: "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js", jsI: "sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=",
+    css: "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css", cssI: "sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=",
+  };
+  const darkMq = matchMedia("(prefers-color-scheme: dark)");
+  const tileUrl = () => `https://{s}.basemaps.cartocdn.com/${darkMq.matches ? "dark_all" : "light_all"}/{z}/{x}/{y}{r}.png`;
+  const mapEl = document.createElement("div"); mapEl.id = "map";
+  let leafletP = null, map = null, tiles = null, layer = null, fitKey = "";
+  function loadLeaflet() {
+    if (window.L) return Promise.resolve();
+    return leafletP ||= new Promise((res, rej) => {
+      const css = Object.assign(document.createElement("link"), { rel: "stylesheet", href: LEAFLET.css, integrity: LEAFLET.cssI, crossOrigin: "" });
+      const js = Object.assign(document.createElement("script"), { src: LEAFLET.js, integrity: LEAFLET.jsI, crossOrigin: "" });
+      js.onload = res;
+      js.onerror = () => { leafletP = null; css.remove(); js.remove(); rej(new Error("Karte konnte nicht geladen werden")); };
+      document.head.append(css, js);
+    });
+  }
+  async function mountMap() {
+    const slot = $("#mapslot");
+    if (!slot) return;
+    slot.append(mapEl);
+    try { await loadLeaflet(); } catch (e) { slot.innerHTML = `<div class="empty">${esc(e.message)}.<br>Zum Neuladen nach unten ziehen.</div>`; return; }
+    if (!document.body.contains(mapEl)) return;
+    if (!map) {
+      map = L.map(mapEl, { zoomControl: false, zoomSnap: 0.5 });
+      map.attributionControl.setPrefix(false);
+      tiles = L.tileLayer(tileUrl(), {
+        subdomains: "abcd", maxZoom: 19,
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · © <a href="https://carto.com/attributions">CARTO</a>',
+      }).addTo(map);
+      layer = L.layerGroup().addTo(map);
+      map.on("moveend", drawMarkers);
+      darkMq.addEventListener?.("change", () => tiles.setUrl(tileUrl()));
+    }
+    map.invalidateSize();
+    const c = view.center, key = `${c.lat},${c.lng},${radius}`;
+    if (key !== fitKey) { fitKey = key; map.fitBounds(L.latLng(c.lat, c.lng).toBounds(radius * 2000), { padding: [8, 8] }); }
+    drawMarkers();
+  }
+  // Preis-Schilder für die günstigsten sichtbaren Tankstellen (beim Hineinzoomen für alle), sonst farbige Punkte
+  function drawMarkers() {
+    if (!map || !layer || !view?.stations || !document.body.contains(mapEl)) return;
+    layer.clearLayers();
+    const c = view.center, lv = levelFn();
+    L.circle([c.lat, c.lng], { radius: radius * 1000, color: "#f5b800", weight: 1.5, opacity: 0.9, fillColor: "#f5b800", fillOpacity: 0.05, interactive: false }).addTo(layer);
+    L.marker([c.lat, c.lng], { icon: L.divIcon({ className: "mk", html: '<div class="me"></div>', iconSize: [0, 0] }), interactive: false, keyboard: false }).addTo(layer);
+    const bounds = map.getBounds().pad(0.15);
+    const priced = view.stations.filter((s) => hasPrice(s)).sort((a, b) => a[fuel] - b[fuel]);
+    const bestId = priced[0]?.id;
+    const vis = view.stations.filter((s) => s.lat != null && bounds.contains([s.lat, s.lng]) && (!onlyOpen || hasPrice(s)));
+    const visPriced = priced.filter((s) => vis.includes(s));
+    const pins = new Set(), placed = [];
+    const order = vis.some((s) => s.id === bestId) ? [priced[0], ...visPriced] : visPriced;
+    for (const s of order) {
+      if (pins.size >= 30) break;
+      if (pins.has(s.id)) continue;
+      const pt = map.latLngToContainerPoint([s.lat, s.lng]);
+      if (placed.every((q) => Math.abs(q.x - pt.x) > 78 || Math.abs(q.y - pt.y) > 30)) { pins.add(s.id); placed.push(pt); }
+    }
+    const rank = new Map(priced.map((s, i) => [s.id, i]));
+    for (const s of vis) {
+      const isPin = pins.has(s.id);
+      const html = isPin ? `<div class="pin lv-${lv(s)}${s.id === bestId ? " best" : ""}"><i></i><span>${price(s[fuel])}</span></div>` : `<div class="dotm lv-${lv(s)}"></div>`;
+      L.marker([s.lat, s.lng], {
+        icon: L.divIcon({ className: "mk", html, iconSize: [0, 0] }),
+        zIndexOffset: isPin ? 3000 - (rank.get(s.id) ?? 0) : 0, keyboard: false, title: `${s.brand}, ${s.place}`,
+      }).on("click", () => openDetail(s.id)).addTo(layer);
+    }
+  }
+
+  // ---- Diagramme: schmale Marken, Haarlinien, Hover/Tipp-Tooltip, jede Grafik mit Tabelle
+  const CH = {};
+  let chSeq = 0;
+  const chartBox = (svg, data) => { const id = "c" + ++chSeq; CH[id] = data; return `<div class="cw" data-cid="${id}">${svg}<div class="tt" hidden></div></div>`; };
+  const fmtNum = (v, d = 2) => v.toFixed(d).replace(".", ",");
+  function barPath(x, y0, w, h, up) {
+    const r = Math.min(4, h, w / 2);
+    if (up) { const y = y0 - h; return `M${x},${y0}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y0}Z`; }
+    const y = y0 + h;
+    return `M${x},${y0}V${y - r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y - r}V${y0}Z`;
+  }
+
+  function lineChart(series) {
+    const main = series[0].pts;
+    if (!main || main.length < 2) return `<div class="sub">Noch zu wenige Daten.</div>`;
+    const W = 340, H = 168, L = 34, R = 10, T = 16, B = 20;
+    const all = series.flatMap((s) => s.pts);
     const t0 = Math.min(...all.map((p) => p[0])), t1 = Math.max(...all.map((p) => p[0]));
     let lo = Math.min(...all.map((p) => p[1])), hi = Math.max(...all.map((p) => p[1]));
-    if (hi - lo < 0.01) { lo -= 0.005; hi += 0.005; }
+    const step = [0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5].find((s) => (hi - lo) / s <= 4) || 1;
+    lo = Math.floor(lo / step + 1e-9) * step; hi = Math.ceil(hi / step - 1e-9) * step;
+    if (hi - lo < step) hi = lo + step;
     const X = (t) => L + (t - t0) / (t1 - t0 || 1) * (W - L - R);
     const Y = (v) => T + (hi - v) / (hi - lo) * (H - T - B);
     let g = "";
-    for (let i = 0; i <= 2; i++) {
-      const v = lo + (hi - lo) * i / 2, y = Y(v);
-      g += `<line class="gl" x1="${L}" x2="${W - R}" y1="${y}" y2="${y}"/><text x="${L - 4}" y="${y + 4}" text-anchor="end">${v.toFixed(2).replace(".", ",")}</text>`;
+    for (let v = lo; v <= hi + 1e-9; v += step) {
+      const y = Y(v).toFixed(1);
+      g += `<line class="gl" x1="${L}" x2="${W - R}" y1="${y}" y2="${y}"/><text x="${L - 5}" y="${(+y + 3.5).toFixed(1)}" text-anchor="end">${fmtNum(v, step < 0.01 ? 3 : 2)}</text>`;
     }
     if (t1 - t0 > 864e5 * 1.2) {
       const d0 = new Date(t0); d0.setHours(24, 0, 0, 0);
       for (let d = d0; d.getTime() < t1; d = new Date(d.getTime() + 864e5)) {
-        const x = X(d.getTime());
-        g += `<line class="gl" x1="${x}" x2="${x}" y1="${T}" y2="${H - B}"/><text x="${x + 3}" y="${H - 6}">${WD[(d.getDay() + 6) % 7]}</text>`;
+        const x = X(d.getTime()).toFixed(1);
+        g += `<line class="gl" x1="${x}" x2="${x}" y1="${T}" y2="${H - B}"/><text x="${(+x + 3).toFixed(1)}" y="${H - 6}">${WD[(d.getDay() + 6) % 7]}</text>`;
       }
     } else {
       const d0 = new Date(t0); d0.setMinutes(0, 0, 0);
-      const step = Math.max(1, Math.ceil((t1 - t0) / 36e5 / 6));
-      for (let d = new Date(d0.getTime() + 36e5); d.getTime() < t1; d = new Date(d.getTime() + step * 36e5)) {
-        const x = X(d.getTime());
+      const stepH = Math.max(1, Math.ceil((t1 - t0) / 36e5 / 6));
+      for (let d = new Date(d0.getTime() + 36e5); d.getTime() < t1; d = new Date(d.getTime() + stepH * 36e5)) {
+        const x = X(d.getTime()).toFixed(1);
         g += `<line class="gl" x1="${x}" x2="${x}" y1="${T}" y2="${H - B}"/><text x="${x}" y="${H - 6}" text-anchor="middle">${d.getHours()} Uhr</text>`;
       }
     }
-    const path = (p) => p.map(([t, v]) => `${X(t).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
-    return `<svg class="chart" viewBox="0 0 ${W} ${H}">${g}${ref && ref.length > 1 ? `<polyline class="ln2" points="${path(ref)}"/>` : ""}<polyline class="ln" points="${path(pts)}"/></svg>`;
-  }
-  function upDownChart(up, down) {
-    const W = 340, H = 130, L = 6, R = 6, T = 8, B = 18;
-    const m = Math.max(1, ...up, ...down);
-    const zero = T + (H - T - B) / 2, sc = (H - T - B) / 2 / m, bw = (W - L - R) / 24;
-    let g = `<line class="gl" x1="${L}" x2="${W - R}" y1="${zero}" y2="${zero}"/>`;
-    for (let i = 0; i < 24; i++) {
-      const x = L + i * bw + bw * 0.15;
-      if (up[i]) g += `<rect class="bar-up" x="${x}" y="${zero - up[i] * sc}" width="${bw * 0.7}" height="${up[i] * sc}" rx="1.5"/>`;
-      if (down[i]) g += `<rect class="bar-down" x="${x}" y="${zero}" width="${bw * 0.7}" height="${down[i] * sc}" rx="1.5"/>`;
-      if (i % 3 === 0) g += `<text x="${x + bw * 0.35}" y="${H - 4}" text-anchor="middle">${i}</text>`;
-    }
-    return `<svg class="chart" viewBox="0 0 ${W} ${H}">${g}</svg>`;
+    g += `<line class="ax" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/>`;
+    const path = (p) => "M" + p.map(([t, v]) => `${X(t).toFixed(1)},${Y(v).toFixed(1)}`).join("L");
+    if (series.length === 1) g += `<path class="area" d="${path(main)}L${X(main[main.length - 1][0]).toFixed(1)},${H - B}L${X(main[0][0]).toFixed(1)},${H - B}Z"/>`;
+    for (const s of [...series].reverse()) if (s.pts.length > 1) g += `<path class="ln ${s.cls || ""}" d="${path(s.pts)}"/>`;
+    const [lt, lv] = main[main.length - 1];
+    g += `<circle class="dot" cx="${X(lt).toFixed(1)}" cy="${Y(lv).toFixed(1)}" r="4"/>`;
+    g += `<text class="lbl" x="${(X(lt) - 7).toFixed(1)}" y="${(Y(lv) - 8).toFixed(1)}" text-anchor="end">${fmtNum(lv, 3)}</text>`;
+    g += `<line class="xh" x1="0" x2="0" y1="${T}" y2="${H - B}" visibility="hidden"/>`;
+    const refs = series.slice(1).map((s) => new Map(s.pts.map(([t, v]) => [t, v])));
+    return chartBox(`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(series.map((s) => s.name).join(" und "))} im Verlauf">${g}</svg>`, {
+      W, xs: main.map(([t]) => X(t)),
+      tip: (i) => ({
+        title: fmtTime(new Date(main[i][0])),
+        rows: [{ value: eur(main[i][1]), label: series[0].name, k: "var(--lo)" },
+          ...series.slice(1).map((s, j) => { const v = refs[j].get(main[i][0]); return v == null ? null : { value: eur(v), label: s.name, k: "var(--mid)" }; }).filter(Boolean)],
+      }),
+    });
   }
 
-  function hourChart(hourAvg, bestHour) {
-    const W = 340, H = 130, L = 6, R = 6, T = 8, B = 18;
-    const vals = Array.from({ length: 24 }, (_, i) => hourAvg[i] ?? hourAvg[String(i)] ?? null);
+  // Abweichung je Stunde: unter der Nulllinie günstiger (blau), darüber teurer (rot)
+  function devBars(hourAvg, bestHour) {
+    const W = 340, H = 170, L = 4, R = 4, T = 18, B = 18, PB = H - B - 14;
+    const vals = Array.from({ length: 24 }, (_, i) => hourAvg[i] ?? null);
     const m = Math.max(0.001, ...vals.filter((v) => v != null).map(Math.abs));
-    const zero = T + (H - T - B) / 2, sc = (H - T - B) / 2 / m, bw = (W - L - R) / 24, now = new Date().getHours();
-    let g = `<line class="gl" x1="${L}" x2="${W - R}" y1="${zero}" y2="${zero}"/>`;
+    const zero = T + (PB - T) / 2, sc = (PB - T) / 2 / m, slot = (W - L - R) / 24, bw = Math.min(24, slot * 0.64), now = new Date().getHours();
+    let g = "";
+    const xs = [];
     vals.forEach((v, i) => {
-      const x = L + i * bw + bw * 0.15;
-      if (v != null) {
-        const h = Math.max(Math.abs(v) * sc, 1), y = v > 0 ? zero - h : zero;
-        const cls = i === bestHour ? "bar-best" : v > 0 ? "bar-up" : "bar-down";
-        g += `<rect class="${cls} ${i === now ? "bar-now" : ""}" x="${x}" y="${y}" width="${bw * 0.7}" height="${h}" rx="1.5"/>`;
-      }
-      if (i % 3 === 0) g += `<text x="${x + bw * 0.35}" y="${H - 4}" text-anchor="middle">${i}</text>`;
+      const cx = L + slot * i + slot / 2;
+      xs.push(cx);
+      if (v != null && Math.abs(v) * sc >= 0.5) g += `<path class="bar ${v < 0 ? "b-lo" : "b-hi"}" data-i="${i}" d="${barPath(cx - bw / 2, zero, bw, Math.abs(v) * sc, v > 0)}"/>`;
+      if (i % 3 === 0) g += `<text x="${cx.toFixed(1)}" y="${H - 4}" text-anchor="middle">${i}</text>`;
     });
-    return `<svg class="chart" viewBox="0 0 ${W} ${H}">${g}</svg>`;
+    g += `<line class="ax" x1="${L}" x2="${W - R}" y1="${zero}" y2="${zero}"/>`;
+    if (bestHour != null && vals[bestHour] != null) {
+      const v = vals[bestHour], y = v < 0 ? zero + Math.abs(v) * sc + 12 : zero - Math.abs(v) * sc - 4;
+      g += `<text class="lbl" x="${Math.min(Math.max(xs[bestHour], 22), W - 22).toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle">${ct(v)}</text>`;
+    }
+    g += `<path class="nowm" d="M${(xs[now] - 4).toFixed(1)},${T - 12} h8 l-4,6 z"/>`;
+    return chartBox(`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Preisabweichung nach Uhrzeit">${g}</svg>`, {
+      W, xs, hl: true,
+      tip: (i) => ({
+        title: `${i}–${i + 1} Uhr${i === now ? " · jetzt" : ""}`,
+        rows: vals[i] == null ? [{ label: "keine Daten" }] : [{ value: ct(vals[i]), label: vals[i] < 0 ? "günstiger als im Tagesmittel" : "teurer als im Tagesmittel", kr: vals[i] < 0 ? "var(--lo)" : "var(--hi)" }],
+      }),
+    });
   }
+
+  // 24 Felder als Kurzfassung im Tipp: je kräftiger, desto größer die Abweichung
+  function stripChart(hourAvg) {
+    const W = 340, H = 46, cw = W / 24, now = new Date().getHours();
+    const vals = Array.from({ length: 24 }, (_, i) => hourAvg[i] ?? null);
+    const m = Math.max(0.001, ...vals.filter((v) => v != null).map(Math.abs));
+    let g = "";
+    const xs = [];
+    vals.forEach((v, i) => {
+      const x = i * cw;
+      xs.push(x + cw / 2);
+      if (v == null) { g += `<rect class="cell" data-i="${i}" x="${(x + 1).toFixed(1)}" y="14" width="${(cw - 2).toFixed(1)}" height="18" rx="3" fill="var(--seg)"/>`; return; }
+      const a = 0.2 + 0.8 * Math.min(1, Math.abs(v) / m);
+      const col = Math.abs(v) < 0.0015 ? "var(--mid)" : v < 0 ? "var(--lo)" : "var(--hi)";
+      g += `<rect class="cell" data-i="${i}" x="${(x + 1).toFixed(1)}" y="14" width="${(cw - 2).toFixed(1)}" height="18" rx="3" fill="${col}" fill-opacity="${a.toFixed(2)}"/>`;
+    });
+    g += `<path class="nowm" d="M${(xs[now] - 4).toFixed(1)},7 h8 l-4,6 z"/>`;
+    [0, 6, 12, 18].forEach((hh) => { g += `<text x="${(hh * cw + 1).toFixed(1)}" y="${H - 2}">${hh}</text>`; });
+    g += `<text x="${W}" y="${H - 2}" text-anchor="end">24</text>`;
+    return chartBox(`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Preis nach Uhrzeit, Kurzfassung" style="margin-top:12px">${g}</svg>`, {
+      W, xs, hl: true,
+      tip: (i) => ({
+        title: `${i}–${i + 1} Uhr${i === now ? " · jetzt" : ""}`,
+        rows: vals[i] == null ? [{ label: "keine Daten" }] : [{ value: ct(vals[i]), label: "ggü. Tagesmittel", kr: vals[i] < 0 ? "var(--lo)" : "var(--hi)" }],
+      }),
+    });
+  }
+
+  // Erhöhungen nach oben (rot), Senkungen nach unten (blau)
+  function upDownChart(up, down) {
+    const W = 340, H = 170, L = 4, R = 4, T = 16, B = 18, PB = H - B - 14;
+    const m = Math.max(1, ...up, ...down);
+    const zero = T + (PB - T) / 2, sc = (PB - T) / 2 / m - 0.5 / m, slot = (W - L - R) / 24, bw = Math.min(24, slot * 0.64);
+    let g = "";
+    const xs = [];
+    for (let i = 0; i < 24; i++) {
+      const cx = L + slot * i + slot / 2;
+      xs.push(cx);
+      if (up[i]) g += `<path class="bar b-hi" data-i="${i}" d="${barPath(cx - bw / 2, zero - 1, bw, up[i] * sc, true)}"/>`;
+      if (down[i]) g += `<path class="bar b-lo" data-i="${i}" d="${barPath(cx - bw / 2, zero + 1, bw, down[i] * sc, false)}"/>`;
+      if (i % 3 === 0) g += `<text x="${cx.toFixed(1)}" y="${H - 4}" text-anchor="middle">${i}</text>`;
+    }
+    g += `<line class="ax" x1="${L}" x2="${W - R}" y1="${zero}" y2="${zero}"/>`;
+    const iu = up.indexOf(Math.max(...up)), id = down.indexOf(Math.max(...down));
+    if (up[iu]) g += `<text class="lbl" x="${xs[iu].toFixed(1)}" y="${(zero - 1 - up[iu] * sc - 4).toFixed(1)}" text-anchor="middle">${up[iu]}</text>`;
+    if (down[id]) g += `<text class="lbl" x="${xs[id].toFixed(1)}" y="${(zero + 1 + down[id] * sc + 12).toFixed(1)}" text-anchor="middle">${down[id]}</text>`;
+    return chartBox(`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Preisänderungen nach Uhrzeit">${g}</svg>`, {
+      W, xs, hl: true,
+      tip: (i) => ({
+        title: `${i}–${i + 1} Uhr`,
+        rows: [{ value: String(up[i]), label: "Erhöhungen", kr: "var(--hi)" }, { value: String(down[i]), label: "Senkungen", kr: "var(--lo)" }],
+      }),
+    });
+  }
+
+  // Tooltip: Fadenkreuz folgt dem Finger/Zeiger zur nächsten Stelle; Texte nur per textContent
+  function chartAt(e) {
+    const cw = e.target.closest?.(".cw");
+    if (!cw) return;
+    const d = CH[cw.dataset.cid], svg = cw.querySelector("svg");
+    if (!d || !svg) return;
+    const r = svg.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * d.W;
+    let i = 0;
+    d.xs.forEach((px, k) => { if (Math.abs(px - x) < Math.abs(d.xs[i] - x)) i = k; });
+    hideTips(cw);
+    const xh = svg.querySelector(".xh");
+    if (xh) { xh.setAttribute("x1", d.xs[i]); xh.setAttribute("x2", d.xs[i]); xh.setAttribute("visibility", "visible"); }
+    svg.querySelectorAll(".hl").forEach((n) => n.classList.remove("hl"));
+    if (d.hl) svg.querySelectorAll(`[data-i="${i}"]`).forEach((n) => n.classList.add("hl"));
+    const t = d.tip(i), tt = cw.querySelector(".tt");
+    tt.replaceChildren();
+    const hd = document.createElement("div"); hd.className = "h"; hd.textContent = t.title; tt.append(hd);
+    for (const row of t.rows) {
+      const rr = document.createElement("div"); rr.className = "r";
+      if (row.k || row.kr) {
+        const k = document.createElement("span");
+        k.className = row.k ? "k" : "kr";
+        if (row.k) k.style.borderColor = row.k; else k.style.background = row.kr;
+        rr.append(k);
+      }
+      if (row.value) { const b = document.createElement("b"); b.textContent = row.value; rr.append(b); }
+      const l = document.createElement("span"); l.textContent = row.label || ""; rr.append(l);
+      tt.append(rr);
+    }
+    tt.hidden = false;
+    const px = d.xs[i] * r.width / d.W, w = tt.offsetWidth;
+    tt.style.left = Math.max(w / 2, Math.min(cw.clientWidth - w / 2, px)) + "px";
+    tt.style.top = "-8px";
+  }
+  function hideTips(except) {
+    document.querySelectorAll(".cw").forEach((cw) => {
+      if (cw === except) return;
+      const tt = cw.querySelector(".tt");
+      if (!tt || tt.hidden) return;
+      tt.hidden = true;
+      cw.querySelector(".xh")?.setAttribute("visibility", "hidden");
+      cw.querySelectorAll(".hl").forEach((n) => n.classList.remove("hl"));
+    });
+  }
+  document.addEventListener("pointermove", (e) => { if (e.target.closest?.(".cw")) chartAt(e); else if (e.pointerType === "mouse") hideTips(); });
+  document.addEventListener("pointerdown", (e) => { if (e.target.closest?.(".cw")) chartAt(e); else hideTips(); });
+  window.addEventListener("scroll", () => hideTips(), { passive: true });
+  $("#detail").addEventListener("scroll", () => hideTips(), { passive: true });
 
   // ---- Route mit Google Maps: App, falls installiert, sonst Browser
   function openRoute(s) {
@@ -1046,7 +1465,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
   });
 
   document.addEventListener("click", (e) => {
-    const el = e.target.closest("[data-route],[data-detail],[data-fuel],[data-sort],[data-open],[data-report],#btnBack,#btnSetup");
+    const el = e.target.closest("[data-route],[data-detail],[data-fuel],[data-sort],[data-open],[data-report],[data-view],#btnBack,#btnSetup");
     if (!el) return;
     if (el.id === "btnBack") return closeDetail();
     if (el.id === "btnSetup") return openSettings();
@@ -1055,6 +1474,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
     if (el.dataset.report) return openReport(el.dataset.report);
     if (el.dataset.fuel) { fuel = el.dataset.fuel; store.set("fuel", fuel); render(); return renderDetail(); }
     if (el.dataset.sort) { sortBy = el.dataset.sort; store.set("sortBy", sortBy); return render(); }
+    if (el.dataset.view) { viewMode = el.dataset.view; store.set("viewMode", viewMode); return render(); }
     if (el.hasAttribute("data-open")) { onlyOpen = !onlyOpen; store.set("onlyOpen", onlyOpen ? "1" : "0"); return render(); }
   });
 
@@ -1069,7 +1489,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
 
   // Ziehen nach unten zum Aktualisieren
   const ptr = $("#ptr"); let py = null, pull = 0, busy = false;
-  window.addEventListener("touchstart", (e) => { py = !detailId && window.scrollY <= 0 && !busy && !document.querySelector("dialog[open]") ? e.touches[0].clientY : null; pull = 0; }, { passive: true });
+  window.addEventListener("touchstart", (e) => { py = !detailId && window.scrollY <= 0 && !busy && !document.querySelector("dialog[open]") && !e.target.closest("#map") ? e.touches[0].clientY : null; pull = 0; }, { passive: true });
   window.addEventListener("touchmove", (e) => {
     if (py == null) return;
     pull = Math.max(0, e.touches[0].clientY - py);

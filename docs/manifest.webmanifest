@@ -1,14 +1,16 @@
 {
-  "name": "Tankpreise",
-  "short_name": "Tankpreise",
+  "name": "Schwabensprit",
+  "short_name": "Schwabensprit",
+  "description": "Tankpreise rund um deine Bases – mit bester Tankzeit und Preisänderungen",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f2f2f7",
-  "theme_color": "#0a7cff",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "lang": "de",
   "icons": [
     { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" },
-    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }
