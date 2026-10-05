@@ -39,7 +39,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-API_URL = "https://creativecommons.tankerkoenig.de/json/list.php"
+API_BASE = "https://creativecommons.tankerkoenig.de/json"
 FUELS = ("e5", "e10", "diesel")
 FUEL_NAMES = {"e5": "Super E5", "e10": "Super E10", "diesel": "Diesel"}
 WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
@@ -79,6 +79,18 @@ class Store:
         self.dir = resolve(cfg["storage"]["data"])
         os.makedirs(self.dir, exist_ok=True)
         self.stations_file = os.path.join(self.dir, "stations.json")
+        self.hours_file = os.path.join(self.dir, "opening_times.json")
+
+    def hours(self):
+        try:
+            with open(self.hours_file, encoding="utf-8") as fh:
+                return json.load(fh)
+        except FileNotFoundError:
+            return {}
+
+    def save_hours(self, hours):
+        with open(self.hours_file, "w", encoding="utf-8") as fh:
+            json.dump(hours, fh, ensure_ascii=False, indent=1, sort_keys=True)
 
     def stations(self):
         try:
@@ -180,19 +192,18 @@ def _price(v):
 
 # --------------------------------------------------------------------------- Abruf
 
-def fetch(cfg, retries=4):
+def _api_key(cfg):
     key = cfg["api"]["key"].strip()
     if not key:
         raise SystemExit(
             "Kein API-Key konfiguriert. Kostenlos registrieren unter "
             "https://onboarding.tankerkoenig.de/ und in config.ini eintragen "
             "oder TANKERKOENIG_API_KEY setzen.")
-    params = {
-        "lat": cfg["api"]["lat"], "lng": cfg["api"]["lng"],
-        "rad": min(float(cfg["api"]["radius_km"]), 25.0),  # API-Maximum: 25 km
-        "sort": "dist", "type": "all", "apikey": key,
-    }
-    url = API_URL + "?" + urllib.parse.urlencode(params)
+    return key
+
+
+def _api_get(endpoint, params, retries=4):
+    url = f"{API_BASE}/{endpoint}?" + urllib.parse.urlencode(params)
     req = urllib.request.Request(url, headers={"User-Agent": "tankpreise-uhingen/1.0"})
     delay = 5
     for attempt in range(1, retries + 1):
@@ -201,19 +212,114 @@ def fetch(cfg, retries=4):
                 data = json.load(r)
             if not data.get("ok"):
                 raise RuntimeError(data.get("message", "API meldet Fehler"))
-            return data.get("stations", [])
+            return data
         except Exception as e:  # Netzwerk- oder API-Fehler -> erneut versuchen
-            log.warning("Abruf fehlgeschlagen (Versuch %d/%d): %s", attempt, retries, e)
+            log.warning("Abruf %s fehlgeschlagen (Versuch %d/%d): %s", endpoint, attempt, retries, e)
             if attempt == retries:
                 raise
             time.sleep(delay)
             delay *= 2
 
 
+def fetch(cfg):
+    params = {
+        "lat": cfg["api"]["lat"], "lng": cfg["api"]["lng"],
+        "rad": min(float(cfg["api"]["radius_km"]), 25.0),  # API-Maximum: 25 km
+        "sort": "dist", "type": "all", "apikey": _api_key(cfg),
+    }
+    return _api_get("list.php", params).get("stations", [])
+
+
+# --------------------------------------------------------------------------- Öffnungszeiten
+
+HOURS_MAX_AGE = timedelta(days=7)   # Öffnungszeiten ändern sich selten
+HOURS_PER_RUN = 40                  # Obergrenze an Detail-Abfragen pro Lauf
+
+_DAY_TOKENS = [
+    ("montag", 0), ("dienstag", 1), ("mittwoch", 2), ("donnerstag", 3), ("freitag", 4),
+    ("samstag", 5), ("sonnabend", 5), ("sonntag", 6), ("sonn", 6),
+    ("mo", 0), ("di", 1), ("mi", 2), ("do", 3), ("fr", 4), ("sa", 5), ("so", 6),
+]
+
+
+def parse_days(text):
+    """'Mo-Fr' -> [0..4], 'Sa, So' -> [5, 6], 'täglich' -> alle. None, wenn unklar."""
+    t = (text or "").lower().replace("ä", "ae")
+    if "taeglich" in t or "durchgehend" in t or "mo-so" in t.replace(" ", "").replace(".", ""):
+        days = set(range(7))
+        if "aus" in t and "sonn" in t:      # "täglich ausser Sonn- und Feiertagen"
+            days.discard(6)
+        return sorted(days)
+    if "werktag" in t:
+        return list(range(6))
+    found = []  # (position, tag)
+    for word, day in _DAY_TOKENS:
+        for m in re.finditer(rf"\b{word}", t):
+            if not any(a <= m.start() < b for a, b, _ in found):
+                found.append((m.start(), m.start() + len(word), day))
+    if not found:
+        return None
+    found.sort()
+    days = set()
+    for i, (a, b, d) in enumerate(found):
+        days.add(d)
+        # "Mo-Fr" / "Mo bis Fr": alle Tage dazwischen ergänzen
+        if i + 1 < len(found) and re.fullmatch(r"[\s.]*(-|–|bis)[\s.]*", t[b:found[i + 1][0]]):
+            nxt = found[i + 1][2]
+            k = d
+            while k != nxt:
+                days.add(k)
+                k = (k + 1) % 7
+    return sorted(days)
+
+
+def _hhmm(t):
+    return (t or "")[:5]
+
+
+def normalize_hours(st):
+    """Tankerkönig-Detaildaten -> kompaktes Format für App und Speicherung."""
+    slots = []
+    for o in st.get("openingTimes") or []:
+        slots.append({"text": (o.get("text") or "").strip(), "start": _hhmm(o.get("start")),
+                      "end": _hhmm(o.get("end")), "days": parse_days(o.get("text"))})
+    return {"wholeDay": bool(st.get("wholeDay")), "slots": slots,
+            "overrides": [str(x) for x in (st.get("overrides") or [])][:5]}
+
+
+def update_opening_times(cfg, store, station_ids, now=None):
+    """Holt Öffnungszeiten für neue Tankstellen und frischt alte wöchentlich auf."""
+    now = now or datetime.now()
+    hours = store.hours()
+    due = [sid for sid in station_ids
+           if sid not in hours or now - datetime.fromisoformat(hours[sid]["fetched"]) > HOURS_MAX_AGE]
+    # Älteste zuerst, damit sich die Abfragen über die Woche verteilen
+    due.sort(key=lambda sid: hours.get(sid, {}).get("fetched", ""))
+    done = 0
+    for sid in due[:HOURS_PER_RUN]:
+        try:
+            st = _api_get("detail.php", {"id": sid, "apikey": _api_key(cfg)}, retries=2).get("station") or {}
+        except Exception as e:
+            log.warning("Öffnungszeiten für %s nicht abrufbar: %s", sid, e)
+            continue
+        hours[sid] = {"fetched": now.isoformat(timespec="minutes"), **normalize_hours(st)}
+        done += 1
+        time.sleep(0.5)
+    if done:
+        store.save_hours(hours)
+        log.info("Öffnungszeiten für %d Tankstellen aktualisiert.", done)
+
+
 def cmd_fetch(cfg):
     stations = fetch(cfg)
-    n = Store(cfg).save_snapshot(datetime.now(), stations)
+    store = Store(cfg)
+    n = store.save_snapshot(datetime.now(), stations)
     log.info("%d Tankstellen gespeichert.", n)
+    # Fehler bei den Öffnungszeiten dürfen den Preisabruf nie scheitern lassen
+    try:
+        update_opening_times(cfg, store, [s["id"] for s in stations])
+    except Exception as e:
+        log.warning("Öffnungszeiten übersprungen: %s", e)
 
 
 # --------------------------------------------------------------------------- Auswertung
@@ -492,6 +598,7 @@ def cmd_export(cfg):
     out_dir = os.path.join(docs, "data")
     os.makedirs(out_dir, exist_ok=True)
     st = store.stations()
+    hours = store.hours()
     now = datetime.now()
 
     # Aktuelle Preise: letzter gespeicherter Abruf
@@ -508,6 +615,8 @@ def cmd_export(cfg):
                 "id": r["sid"], **nice_station(info), "dist": info.get("dist_km"),
                 "lat": info.get("lat"), "lng": info.get("lng"),
                 "open": r["is_open"], **{f: r[f] for f in FUELS},
+                "hours": {k: v for k, v in hours[r["sid"]].items() if k != "fetched"}
+                if r["sid"] in hours else None,
             })
         latest["stations"].sort(key=lambda s: s["dist"] or 0)
 

@@ -45,6 +45,7 @@ Schlägt ein Lauf fehl, etwa wegen eines falschen API-Keys, schickt GitHub dir e
 | `.github/workflows/tankpreise.yml` | Zeitplan bei GitHub (stündlich + wöchentlich) |
 | `data/prices-JJJJ-MM.csv` | gesammelte Preise, eine Zeile pro Abruf und Tankstelle (lässt sich auch in Numbers/Excel öffnen) |
 | `data/stations.json` | Stammdaten der Tankstellen |
+| `data/opening_times.json` | Öffnungszeiten (werden wöchentlich und für neue Tankstellen abgerufen) |
 | `docs/index.html` | die iPhone-Web-App |
 | `docs/reports/` | Wochenreports (HTML + Markdown) |
 | `docs/data/*.json` | aufbereitete Daten für die App |

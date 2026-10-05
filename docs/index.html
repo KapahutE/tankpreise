@@ -71,6 +71,12 @@ button{font:inherit;border:0;cursor:pointer;color:inherit}
 .item .p b{font-size:20px} .item .p b sup{font-size:12px}
 .item .d{font-size:12px;color:var(--muted)}
 .item.closed{opacity:.45}
+.item .hrs{font-weight:400;color:var(--muted);font-size:13px}
+.hours{width:100%;border-collapse:collapse;font-size:15px}
+.hours td{padding:7px 0;border-bottom:1px solid var(--line)}
+.hours tr:last-child td{border-bottom:0}
+.hours td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.hours tr.today td{font-weight:700}
 .item.best .p b{color:var(--good)}
 .chev{color:var(--muted);flex:none}
 svg.chart{width:100%;height:auto;display:block}
@@ -243,7 +249,46 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
   }
 
   const byId = (id) => latest?.stations?.find((s) => s.id === id);
-  const hasPrice = (s, f = fuel) => s.open && s[f] != null;
+
+  // ---- Öffnungszeiten
+  const toMin = (hm) => { const [h, m] = String(hm).split(":").map(Number); return h * 60 + (m || 0); };
+  const fmtHM = (m) => m >= 1440 ? "24:00" : `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  // Zustand laut Öffnungszeiten-Plan: {open, text} oder null, wenn kein Plan bekannt
+  function schedule(s, now = new Date()) {
+    const H = s.hours;
+    if (!H) return null;
+    if (H.wholeDay) return { open: true, text: "24 h geöffnet", short: "24 h" };
+    const slots = (H.slots || []).filter((x) => x.days && x.start && x.end);
+    if (!slots.length) return null;
+    const wd = (now.getDay() + 6) % 7, t = now.getHours() * 60 + now.getMinutes();
+    const iv = (d) => slots.filter((x) => x.days.includes(d)).map((x) => {
+      const a = toMin(x.start); let b = toMin(x.end); if (b <= a) b += 1440; return [a, b];
+    });
+    for (const [a, b] of iv(wd)) if (t >= a && t < b) {
+      if (b - a >= 1440) return { open: true, text: "24 h geöffnet", short: "24 h" };
+      return { open: true, text: `geöffnet bis ${fmtHM(b % 1440 || 1440)}`, short: `bis ${fmtHM(b % 1440 || 1440)}` };
+    }
+    for (const [a, b] of iv((wd + 6) % 7)) if (b > 1440 && t < b - 1440)
+      return { open: true, text: `geöffnet bis ${fmtHM(b - 1440)}`, short: `bis ${fmtHM(b - 1440)}` };
+    for (let k = 0; k < 7; k++) {
+      const d = (wd + k) % 7;
+      const st = iv(d).map((x) => x[0]).filter((a) => k > 0 || a > t).sort((x, y) => x - y)[0];
+      if (st != null) {
+        const when = k === 0 ? `um ${fmtHM(st)}` : k === 1 ? `morgen ${fmtHM(st)}` : `${WD[d]} ${fmtHM(st)}`;
+        return { open: false, text: `öffnet ${when}`, short: `öffnet ${when}` };
+      }
+    }
+    return { open: false, text: "", short: "" };
+  }
+  // Geöffnet? Frische API-Daten (< 30 Min.) haben Vorrang, sie kennen auch Feiertage.
+  // Bei älteren Daten zählt der Plan, damit "öffnet um 6:00" auch um 6:05 noch stimmt.
+  function state(s) {
+    const sch = schedule(s);
+    const fresh = latest?.updated && Date.now() - new Date(latest.updated) < 30 * 60000;
+    const open = !sch || fresh ? s.open : sch.open;
+    return { open, sch, text: sch && sch.open === open ? sch.text : "", short: sch && sch.open === open ? sch.short : "" };
+  }
+  const hasPrice = (s, f = fuel) => state(s).open && s[f] != null;
 
   function render() {
     document.querySelectorAll("#seg button").forEach((b) => b.classList.toggle("on", b.dataset.f === fuel));
@@ -265,7 +310,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
         <div class="label">Am günstigsten gerade · ${FUELS[fuel]}</div>
         <div class="price">${price(best[fuel])} €</div>
         <div class="where">${esc(best.brand)} · ${esc(best.place)}</div>
-        <div class="sub">${esc(best.street)} · ${km(best.dist)}</div>
+        <div class="sub">${esc(best.street)} · ${km(best.dist)}${state(best).text ? " · " + state(best).text : ""}</div>
         <div class="row">
           ${withPrice.length > 1 ? `<span class="pill good">${ct(best[fuel] - avgNow)} unter Ø der Umgebung</span>` : ""}
           ${sum?.trend != null ? `<span class="pill ${sum.trend > 0 ? "bad" : "good"}">Woche ${ct(sum.trend)}</span>` : ""}
@@ -306,10 +351,11 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
     for (const s of list) {
       const has = hasPrice(s);
       const d = has && best ? s[fuel] - best[fuel] : null;
+      const stt = state(s);
       h += `<button class="item ${has ? "" : "closed"} ${s === best ? "best" : ""}" data-detail="${esc(s.id)}">
-        <div class="info"><div class="name">${esc(s.brand)}</div>
+        <div class="info"><div class="name">${esc(s.brand)}${stt.open && stt.short ? ` <span class="hrs">· ${esc(stt.short)}</span>` : ""}</div>
           <div class="addr">${km(s.dist)} · ${esc(s.place)}, ${esc(s.street)}</div></div>
-        <div class="p">${has ? `<b>${price(s[fuel])}</b><div class="d">${d ? ct(d) : "günstigste"}</div>` : `<div class="d">${s.open ? "kein " + FUELS[fuel] : "geschlossen"}</div>`}</div>
+        <div class="p">${has ? `<b>${price(s[fuel])}</b><div class="d">${d ? ct(d) : "günstigste"}</div>` : `<div class="d">${stt.open ? "kein " + FUELS[fuel] : "geschlossen"}${!stt.open && stt.short ? "<br>" + esc(stt.short) : ""}</div>`}</div>
         ${CHEV}</button>`;
     }
     if (!list.length) h += `<div class="empty">Gerade hat keine Tankstelle geöffnet.</div>`;
@@ -369,7 +415,7 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
       const rank = all.findIndex((x) => x.id === s.id) + 1;
       return `<button class="ftile ${f === fuel ? "on" : ""}" data-fuel="${f}"><div class="n">${FUELS[f]}</div>
         <b>${hasPrice(s, f) ? price(s[f]) : "–"}</b>
-        <div class="r">${rank ? `Platz ${rank}/${all.length}` : s.open ? "nicht angeboten" : "geschlossen"}</div></button>`;
+        <div class="r">${rank ? `Platz ${rank}/${all.length}` : state(s).open ? "nicht angeboten" : "geschlossen"}</div></button>`;
     }).join("");
     const all = latest.stations.filter((x) => hasPrice(x));
     const avgNow = mean(all.map((x) => x[fuel]));
@@ -379,11 +425,12 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
       <div class="dhead"><h1>${esc(s.brand)}</h1>
         <div class="sub">${esc(s.street)}, ${esc(s.place)} · ${km(s.dist)} von Uhingen</div>
         <div class="row" style="margin-top:8px">
-          <span class="pill ${s.open ? "good" : "neutral"}">${s.open ? "Geöffnet" : "Geschlossen"}</span>
+          <span class="pill ${state(s).open ? "good" : "neutral"}">${state(s).open ? "Geöffnet" : "Geschlossen"}${state(s).text ? " · " + esc(state(s).text.replace(/^geöffnet /, "")) : ""}</span>
           ${diffNow != null && all.length > 1 ? `<span class="pill ${diffNow > 0.0005 ? "bad" : "good"}">${ct(diffNow)} ggü. Ø jetzt</span>` : ""}
         </div></div>
       <div class="fuelgrid">${tiles}</div>
       <button class="btn block" data-route="${esc(s.id)}">${NAV} Route mit Google Maps</button>
+      ${hoursCard(s)}
       <div id="dstats"><div class="empty">Lade Verlauf …</div></div>
       <p class="sub" style="text-align:center;margin-top:24px">Stand ${ago(latest.updated)}</p>`;
 
@@ -432,6 +479,23 @@ input{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:10p
         h += `<div class="card"><div class="sub" style="margin-bottom:6px">Abweichung nach Uhrzeit an dieser Tankstelle</div>${hourChart(hourAvg, bestH)}</div>`;
     }
     $("#dstats").innerHTML = h;
+  }
+
+  function hoursCard(s) {
+    const H = s.hours;
+    let body;
+    if (!H) body = `<div class="sub">Die Öffnungszeiten werden beim nächsten Abruf geladen.</div>`;
+    else if (H.wholeDay) body = `<div><b>Durchgehend geöffnet</b> – 24 Stunden, 7 Tage.</div>`;
+    else if (!H.slots?.length) body = `<div class="sub">Keine Öffnungszeiten hinterlegt.</div>`;
+    else {
+      const wd = (new Date().getDay() + 6) % 7;
+      body = `<table class="hours">` + H.slots.map((x) => {
+        const range = x.start === x.end ? "24 h" : `${x.start}–${x.end === "00:00" ? "24:00" : x.end} Uhr`;
+        return `<tr class="${x.days?.includes(wd) ? "today" : ""}"><td>${esc(x.text)}</td><td>${esc(range)}</td></tr>`;
+      }).join("") + `</table>`;
+      if (H.overrides?.length) body += `<div class="sub" style="margin-top:10px"><b>Abweichende Zeiten:</b><br>${H.overrides.map(esc).join("<br>")}</div>`;
+    }
+    return `<h2>Öffnungszeiten</h2><div class="card">${body}</div>`;
   }
 
   // ---- Diagramme
