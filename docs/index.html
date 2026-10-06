@@ -1545,7 +1545,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     if (!runs?.length) return null;
     const run = runs[0], age = minsAgo(run.created_at);
     if (["queued", "waiting", "pending", "requested"].includes(run.status) && age >= 10)
-      return `${what} wartet seit ${age} Min. bei GitHub auf einen freien Rechner.`;
+      return `${what} hängt seit ${age} Min. bei GitHub in der Warteschlange.`;
     if (run.status === "in_progress" && age >= 20) return `${what} läuft seit ${age} Min. ungewöhnlich lange.`;
     if (run.status === "completed" && ["failure", "timed_out", "startup_failure"].includes(run.conclusion))
       return `${what} ist um ${hm(new Date(run.updated_at))} Uhr fehlgeschlagen.`;
@@ -1561,7 +1561,9 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     const age = view.updated ? minsAgo(view.updated) : null;
     if (age != null && age > 35) msgs.push(`Die Preise sind ${age >= 120 ? `${Math.round(age / 60)} Std.` : `${age} Min.`} alt – normalerweise kommt alle 15 Minuten ein neuer Abruf.`);
     try {
-      if (token() && repo()) {
+      // Zum Preisabruf nur etwas sagen, wenn die Preise wirklich veraltet sind – eine hängende
+      // oder ersetzte Veröffentlichung der Webseite allein ist kein Problem für die App.
+      if (age != null && age > 35 && token() && repo()) {
         const m = describe(await lastRun(repo(), "tankpreise.yml", token()), "Der Preisabruf");
         if (m) msgs.push(m);
       }

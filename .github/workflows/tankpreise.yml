@@ -17,19 +17,20 @@ permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: tankpreise
-  cancel-in-progress: false
-
 env:
   TZ: Europe/Berlin
 
 jobs:
+  # Daten abrufen und speichern – bewusst ohne "github-pages"-Umgebung, damit eine hängende
+  # Veröffentlichung die Abrufe nicht mehr blockieren kann.
   tankpreise:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+    timeout-minutes: 15
+    concurrency:
+      group: tankpreise
+      cancel-in-progress: false
+    outputs:
+      public: ${{ steps.repo.outputs.public }}
     steps:
       - uses: actions/checkout@v7
 
@@ -62,13 +63,26 @@ jobs:
       - id: repo
         env:
           GH_TOKEN: ${{ github.token }}
-        run: echo "private=$(gh api repos/${{ github.repository }} --jq .private)" >> "$GITHUB_OUTPUT"
-      - if: steps.repo.outputs.private == 'false'
-        uses: actions/configure-pages@v6
-      - if: steps.repo.outputs.private == 'false'
+        run: echo "public=$(gh api repos/${{ github.repository }} --jq '.private == false')" >> "$GITHUB_OUTPUT"
+      - if: steps.repo.outputs.public == 'true'
         uses: actions/upload-pages-artifact@v5
         with:
           path: docs
+
+  # Webseite veröffentlichen. Eigene Warteschlange: Eine neuere Veröffentlichung ersetzt eine
+  # wartende oder hängende ältere.
+  pages:
+    needs: tankpreise
+    if: needs.tankpreise.outputs.public == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: pages
+      cancel-in-progress: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v6
       - id: deploy
-        if: steps.repo.outputs.private == 'false'
         uses: actions/deploy-pages@v5
