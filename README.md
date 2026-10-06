@@ -1,6 +1,6 @@
 # Tankpreis-Monitor mit Bases
 
-Feste Orte („Bases“) stehen in `bases.json` – aktuell **Base F** (Uhingen), **Base H** (Leinfelden) und **Homebase Sailers** (Metzingen), je 25 km. Für sie werden alle 15 Minuten Preise gesammelt und ausgewertet, inklusive der Uhrzeiten, zu denen Preise erhöht oder gesenkt werden. In der App lassen sich Ort (Base, eigener Standort, Ortssuche) und Radius (1–25 km) frei wählen; außerhalb der Bases zeigt die App Live-Preise, wenn unter ⚙ ein Tankerkönig-Schlüssel hinterlegt ist.
+Feste Orte („Bases“) stehen in `bases.json` – aktuell **Base F** (Uhingen), **Base H** (Leinfelden) **Homebase Sailers** (Metzingen) und **Homebase M&J** (Wernau am Neckar), je 25 km. Für sie werden alle 15 Minuten Preise gesammelt und ausgewertet, inklusive der Uhrzeiten, zu denen Preise erhöht oder gesenkt werden. In der App lassen sich Ort (Base, eigener Standort, Ortssuche) und Radius (1–25 km) frei wählen; außerhalb der Bases zeigt die App Live-Preise, wenn unter ⚙ ein Tankerkönig-Schlüssel hinterlegt ist.
 
 
 Ruft **stündlich** die Spritpreise (Super E5, E10, Diesel) aller Tankstellen im Umkreis von Uhingen ab, speichert sie und erstellt **jeden Montag** eine Wochenauswertung. Alles läuft kostenlos bei **GitHub**, auch wenn dein iPhone aus ist. Auf dem iPhone bedienst du es über eine **Web-App auf dem Home-Bildschirm**.
