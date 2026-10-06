@@ -4204,6 +4204,36 @@
   ],
   "wholeDay": false
  },
+ "c7b99d08-912c-48e1-9ee4-a36edc9c96fa": {
+  "fetched": "2026-10-06T23:30",
+  "overrides": [
+   "28.09.2026, 06:00:00 - 24.11.2026, 14:00:00: geschlossen"
+  ],
+  "slots": [
+   {
+    "days": [
+     6
+    ],
+    "end": "22:00",
+    "start": "08:00",
+    "text": "Sonntag, Feiertag"
+   },
+   {
+    "days": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "end": "22:00",
+    "start": "06:00",
+    "text": "täglich ausser Sonn- und Feiertagen"
+   }
+  ],
+  "wholeDay": false
+ },
  "c82ccef2-0eb8-41aa-80fc-ce45502575ad": {
   "fetched": "2026-10-06T01:26",
   "overrides": [],
@@ -5006,6 +5036,41 @@
     "end": "22:00",
     "start": "07:00",
     "text": "Sonntag, Feiertag"
+   }
+  ],
+  "wholeDay": false
+ },
+ "e1cafea0-3da4-4419-9013-e41754332638": {
+  "fetched": "2026-10-06T23:30",
+  "overrides": [],
+  "slots": [
+   {
+    "days": [
+     6
+    ],
+    "end": "22:00",
+    "start": "08:00",
+    "text": "Sonntag, Feiertag"
+   },
+   {
+    "days": [
+     5
+    ],
+    "end": "22:00",
+    "start": "07:00",
+    "text": "Samstag"
+   },
+   {
+    "days": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ],
+    "end": "22:00",
+    "start": "06:00",
+    "text": "Mo-Fr"
    }
   ],
   "wholeDay": false
