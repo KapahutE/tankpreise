@@ -29,6 +29,34 @@
   "slots": [],
   "wholeDay": true
  },
+ "005056a9-779e-1ee7-b0fa-b6336badd11b": {
+  "fetched": "2026-10-06T15:59",
+  "overrides": [],
+  "slots": [
+   {
+    "days": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ],
+    "end": "23:00",
+    "start": "05:00",
+    "text": "Mo-Fr"
+   },
+   {
+    "days": [
+     5,
+     6
+    ],
+    "end": "23:00",
+    "start": "07:00",
+    "text": "Samstag, Sonntag, Feiertag"
+   }
+  ],
+  "wholeDay": false
+ },
  "006a97b3-87fc-4c2c-be88-20f5d4f2998a": {
   "fetched": "2026-10-06T13:59",
   "overrides": [],
@@ -2050,6 +2078,12 @@
    }
   ],
   "wholeDay": false
+ },
+ "6f03cdd2-c9a8-4605-adb3-b202b7bc650b": {
+  "fetched": "2026-10-06T15:59",
+  "overrides": [],
+  "slots": [],
+  "wholeDay": true
  },
  "709bae97-eac8-44e3-8902-7ce6abb2ccc9": {
   "fetched": "2026-10-05T19:23",
