@@ -109,6 +109,9 @@ button{font:inherit;border:0;cursor:pointer;color:inherit;background:none}
 .badge{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;flex:none;font-weight:800;font-size:15px;letter-spacing:-.02em;
   color:var(--fg);background:var(--mid-bg);box-shadow:inset 0 0 0 2px var(--mid)}
 .badge.t3{font-size:11.5px;letter-spacing:0}
+.badge.haslogo{background:#fff}
+.badge img{width:62%;height:62%;object-fit:contain;border-radius:5px}
+.badge.lv-off img{filter:grayscale(1);opacity:.5}
 .badge.lv-lo{background:var(--lo-bg);box-shadow:inset 0 0 0 2px var(--lo)}
 .badge.lv-hi{background:var(--hi-bg);box-shadow:inset 0 0 0 2px var(--hi)}
 .badge.lv-off{background:var(--seg);box-shadow:none;color:var(--muted)}
@@ -644,6 +647,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     }
     render();
     if (detailId) renderDetail();
+    if (view.stations) preloadLogos(view.stations);
     if (view.base && !view.error) loadHistory().then(() => { renderAnalysis(); if (detailId) renderDetail(); });
   }
 
@@ -779,9 +783,38 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     if (!w.length) return "?";
     return (w.length > 1 ? w[0][0] + w[1][0] : w[0].length <= 3 ? w[0] : w[0][0]).toUpperCase();
   };
+  // Marken-Logos: Website-Symbol der Marke über Googles Icon-Dienst (es wird nur die Domain der
+  // Marke übertragen). Beim Laden einmal vorgeladen und je Marke gemerkt; ohne brauchbares Logo
+  // bleibt das Kürzel.
+  const LOGO_DOMAIN = {
+    ARAL: "aral.de", SHELL: "shell.de", ESSO: "esso.de", ENI: "eni.com", AVIA: "avia.de", "AVIA XPRESS": "avia.de",
+    JET: "jet-tankstellen.de", TOTALENERGIES: "totalenergies.de", TOTAL: "totalenergies.de", HEM: "hem-tankstelle.de",
+    BFT: "bft.de", ORLEN: "orlen.de", "ORLEN EXPRESS": "orlen.de", OMV: "omv.de", STAR: "star.de",
+    WESTFALEN: "westfalen.com", Q1: "q1.eu", HOYER: "hoyer.de", TAMOIL: "tamoil.de",
+  };
+  const logoKey = (b) => String(b || "").trim().toUpperCase();
+  const logoUrl = (k) => `https://www.google.com/s2/favicons?domain=${LOGO_DOMAIN[k]}&sz=64`;
+  const logos = store.getJ("logos", {});   // Marke -> { ok: 1|0, t: Zeitpunkt }
+  const logoInner = (k, t) => `<img src="${logoUrl(k)}" alt="" decoding="async" data-t="${esc(t)}" onerror="this.parentNode.classList.remove('haslogo');this.replaceWith(this.dataset.t)">`;
+  function preloadLogos(stations) {
+    const todo = new Set(stations.map((s) => logoKey(s.brand)).filter((k) => LOGO_DOMAIN[k]
+      && !(logos[k] && (logos[k].ok || Date.now() - logos[k].t < 7 * 864e5))));   // Fehlschläge nach 7 Tagen neu versuchen
+    for (const k of todo) {
+      const img = new Image();
+      const done = (ok) => {
+        logos[k] = { ok: ok ? 1 : 0, t: Date.now() }; store.setJ("logos", logos);
+        if (ok) document.querySelectorAll(`.badge[data-logo="${CSS.escape(k)}"]:not(.haslogo)`).forEach((el) => {
+          el.classList.add("haslogo"); el.innerHTML = logoInner(k, el.textContent);
+        });
+      };
+      img.onload = () => done(img.naturalWidth >= 32);   // Platzhalter-Weltkugel (16 px) zählt nicht
+      img.onerror = () => done(false);
+      img.src = logoUrl(k);
+    }
+  }
   const badge = (s, lv = "mid", cls = "") => {
-    const t = initials(s?.brand);
-    return `<div class="badge lv-${lv}${t.length > 2 ? " t3" : ""}${cls ? " " + cls : ""}" aria-hidden="true">${esc(t)}</div>`;
+    const t = initials(s?.brand), k = logoKey(s?.brand), has = LOGO_DOMAIN[k] && logos[k]?.ok;
+    return `<div class="badge lv-${lv}${t.length > 2 ? " t3" : ""}${has ? " haslogo" : ""}${cls ? " " + cls : ""}"${LOGO_DOMAIN[k] ? ` data-logo="${esc(k)}"` : ""} aria-hidden="true">${has ? logoInner(k, t) : esc(t)}</div>`;
   };
   const pill = (d, text, cls = "") => `<span class="pill ${d < -0.0005 ? "lo" : d > 0.0005 ? "hi" : ""} ${cls}"><i></i>${text}</span>`;
   const eur2 = (v) => v.toFixed(2).replace(".", ",") + " €";
