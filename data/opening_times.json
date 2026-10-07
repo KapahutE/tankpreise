@@ -3038,6 +3038,12 @@
   ],
   "wholeDay": false
  },
+ "57332fba-18f9-4d5d-b116-7d0064886eb9": {
+  "fetched": "2026-10-07T21:56",
+  "overrides": [],
+  "slots": [],
+  "wholeDay": true
+ },
  "57640b75-b351-4287-8a0b-f12a2b7dc71c": {
   "fetched": "2026-10-07T17:01",
   "overrides": [],
@@ -7323,6 +7329,12 @@
    }
   ],
   "wholeDay": false
+ },
+ "dec4dc97-9f44-45b3-83c0-839235b775eb": {
+  "fetched": "2026-10-07T21:56",
+  "overrides": [],
+  "slots": [],
+  "wholeDay": true
  },
  "defffb81-c4da-4f04-92eb-bb503de51e12": {
   "fetched": "2026-10-06T10:16",
