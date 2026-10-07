@@ -2789,6 +2789,41 @@
   "slots": [],
   "wholeDay": true
  },
+ "51d4b6fd-a095-1aa0-e100-80009459e03a": {
+  "fetched": "2026-10-07T20:49",
+  "overrides": [],
+  "slots": [
+   {
+    "days": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ],
+    "end": "23:00",
+    "start": "05:00",
+    "text": "Mo-Fr"
+   },
+   {
+    "days": [
+     6
+    ],
+    "end": "23:00",
+    "start": "07:00",
+    "text": "Sonntag, Feiertag"
+   },
+   {
+    "days": [
+     5
+    ],
+    "end": "23:00",
+    "start": "06:00",
+    "text": "Samstag"
+   }
+  ],
+  "wholeDay": false
+ },
  "51d4b705-a095-1aa0-e100-80009459e03a": {
   "fetched": "2026-10-05T23:59",
   "overrides": [],
@@ -2898,6 +2933,41 @@
   "overrides": [],
   "slots": [],
   "wholeDay": true
+ },
+ "558627d9-38e9-41a3-90f6-79829827aa6c": {
+  "fetched": "2026-10-07T20:49",
+  "overrides": [],
+  "slots": [
+   {
+    "days": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ],
+    "end": "19:00",
+    "start": "06:00",
+    "text": "Mo-Fr"
+   },
+   {
+    "days": [
+     5
+    ],
+    "end": "16:00",
+    "start": "08:00",
+    "text": "Samstag"
+   },
+   {
+    "days": [
+     6
+    ],
+    "end": "17:00",
+    "start": "10:00",
+    "text": "Sonntag, Feiertag"
+   }
+  ],
+  "wholeDay": false
  },
  "57640b75-b351-4287-8a0b-f12a2b7dc71c": {
   "fetched": "2026-10-07T17:01",
