@@ -1105,7 +1105,9 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
       <div class="sub">${sub}</div></div></div>
       <p class="small" style="margin:10px 0 0">${NOON_LAW} Beobachtet: ${fmtNum(info.share * 100, 0)} % aller Preiserhöhungen der letzten Tage lagen zwischen 12 und 13 Uhr.</p></section>`;
   }
-  const NOON_LAW = "";
+  // Rechtsgrundlage: § 2 Abs. 1 Kraftstoffpreisanpassungsgesetz (KPAnG), BGBl. 2026 I Nr. 82, in Kraft seit 1.4.2026.
+  // Die Karte erscheint nur, solange die Daten die Regel zeigen – fällt sie weg, verschwindet sie von selbst.
+  const NOON_LAW = "Gesetzlich (§ 2 Kraftstoffpreisanpassungsgesetz, seit 1.4.2026): Erhöhen nur einmal täglich um 12 Uhr, senken jederzeit.";
   setInterval(() => { if (!document.hidden) renderNoon(); }, 30000);
 
   function renderAnalysis() {
