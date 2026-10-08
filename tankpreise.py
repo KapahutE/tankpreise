@@ -424,12 +424,27 @@ def _api_status(store, **info):
         json.dump({"ts": datetime.now().isoformat(timespec="minutes"), **info}, fh, ensure_ascii=False, indent=1)
 
 
-def cmd_fetch(cfg):
+def _gh_output(**kv):
+    """Ergebnis an den GitHub-Ablauf melden (nur dort gesetzt)."""
+    path = os.environ.get("GITHUB_OUTPUT")
+    if path:
+        with open(path, "a", encoding="utf-8") as fh:
+            for k, v in kv.items():
+                fh.write(f"{k}={v}\n")
+
+
+def cmd_fetch(cfg, min_interval=MIN_INTERVAL):
+    """Ruft ab, außer der letzte Abruf ist jünger als min_interval. Gibt zurück, ob abgerufen wurde.
+    Der Zeitplan startet alle 5 Minuten, ruft aber erst nach 13 Minuten wieder ab: So fängt ein
+    ausgelassener Termin bei GitHub der nächste auf, ohne dass öfter als alle ~15 Minuten abgerufen wird."""
     store = Store(cfg)
     last = store._state().get("ts")
-    if last and datetime.now() - datetime.fromisoformat(last) < MIN_INTERVAL:
-        log.info("Letzter Abruf um %s liegt weniger als 5 Minuten zurück – übersprungen.", last[11:16])
-        return
+    min_interval = max(min_interval, MIN_INTERVAL)
+    if last and datetime.now() - datetime.fromisoformat(last) < min_interval - timedelta(seconds=30):
+        log.info("Letzter Abruf um %s liegt weniger als %d Minuten zurück – übersprungen.",
+                 last[11:16], min_interval.total_seconds() // 60)
+        _gh_output(fetched="false")
+        return False
     try:
         stations = fetch(cfg)
     except Exception as e:
@@ -442,6 +457,8 @@ def cmd_fetch(cfg):
         update_opening_times(cfg, store, [s["id"] for s in stations])
     except Exception as e:
         log.warning("Öffnungszeiten übersprungen: %s", e)
+    _gh_output(fetched="true")
+    return True
 
 
 # --------------------------------------------------------------------------- Auswertung
@@ -913,8 +930,28 @@ def cmd_report(cfg, days=7, end=None):
         with open(path + ".md", "w", encoding="utf-8") as fh:
             fh.write(md_s)
         log.info("Report geschrieben: %s.html / .md", path)
-        print(md_s, "\n")
     cmd_export(cfg)
+
+
+def ensure_report(cfg, now=None):
+    """Erstellt den Report der letzten vollständigen Woche (Mo–So), falls er fehlt und es Daten gibt.
+    Fängt ausgefallene Montagsläufe auf; gibt zurück, ob ein Report erstellt wurde."""
+    now = now or datetime.now()
+    monday = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    if now < monday + timedelta(hours=6):          # Montag vor 6 Uhr: dem regulären Lauf Vorrang lassen
+        monday -= timedelta(days=7)
+    start = monday - timedelta(days=7)
+    y, w, _ = start.isocalendar()
+    docs = resolve(cfg["storage"]["docs"])
+    missing = [b for b in load_bases(cfg)
+               if not os.path.exists(os.path.join(docs, "reports", b["id"], f"report_{y}-KW{w:02d}.html"))]
+    if not missing:
+        return False
+    if not Store(cfg).rows(start, monday):          # Woche ohne Daten (vor Beginn der Aufzeichnung)
+        return False
+    log.info("Wochenreport KW %d/%d fehlt – wird nachgeholt.", w, y)
+    cmd_report(cfg, 7, monday)
+    return True
 
 
 # --------------------------------------------------------------------------- Export für die Web-App
@@ -929,9 +966,9 @@ def cmd_report(cfg, days=7, end=None):
 FC_STEP_MIN = 15
 FC_SLOTS = 24 * 60 // FC_STEP_MIN      # 96 Viertelstunden je Tag
 FC_TRAIN_DAYS = 21                     # so weit zurück wird gelernt
-FC_PRIOR = 3.0                         # Gewicht des Marken-/Gesamtprofils (in "Tagen")
+FC_PRIOR = 2.0                         # Gewicht des Marken-/Gesamtmusters (in "Tagen")
 FC_MIN_TRAIN_DAYS = 2                  # mindestens so viele Tage zum Lernen …
-FC_MIN_TEST_STEPS = FC_SLOTS // 2      # … plus mindestens 12 Stunden zum Prüfen
+FC_MIN_TEST_STEPS = FC_SLOTS           # … plus 1 voller Tag zum Prüfen (inkl. 12-Uhr-Erhöhung)
 FC_HORIZON_H = 24                      # Prognose für die nächsten 24 Stunden
 FC_EVAL_H = 12                         # Güte wird für 1–12 Stunden voraus bewertet
 FC_MAX_GAP = timedelta(minutes=70)     # länger ohne Abruf -> Lücke statt Fortschreiben
@@ -967,62 +1004,55 @@ def fc_grid(store, start, end):
 
 
 class FcModel:
-    """Tagesprofile je Tankstelle/Sorte (gelernt aus den Rasterpunkten [0, k_end)) und Trend je Sorte."""
+    """Typische Preisänderung je Viertelstunde des Tages – je Tankstelle/Sorte, mit wenig Daten
+    gestützt auf das Muster der Marke bzw. aller Tankstellen. Gelernt aus den Rasterpunkten [0, k_end).
+    Die Prognose summiert diese Änderungen vom letzten bekannten Preis bis zur Zielzeit auf. So stecken
+    die Erhöhung um 12 Uhr, die Senkungen am Nachmittag und ein allgemeiner Trend direkt im Modell."""
 
     def __init__(self, t0, grid, brands, k_end):
         self.slot0 = (t0.hour * 60 + t0.minute) // FC_STEP_MIN
-        raw, pool, diffs = {}, {}, {j: [] for j in range(len(FUELS))}
+        raw, pool = {}, {}
         for sid, arrs in grid.items():
             for j, a in enumerate(arrs):
-                dsum, dcnt = {}, {}
-                for k in range(k_end):
-                    if a[k] >= 0:
-                        d = (self.slot0 + k) // FC_SLOTS
-                        dsum[d] = dsum.get(d, 0) + a[k]
-                        dcnt[d] = dcnt.get(d, 0) + 1
-                days = sorted(d for d in dcnt if dcnt[d] >= FC_SLOTS // 4)   # nur Tage mit ≥ 6 h Daten
-                if not days:
-                    continue
-                dmean = {d: dsum[d] / dcnt[d] for d in days}
                 s, c = [0.0] * FC_SLOTS, [0] * FC_SLOTS
-                for k in range(k_end):
-                    if a[k] >= 0:
-                        d = (self.slot0 + k) // FC_SLOTS
-                        if d in dmean:
-                            sl = (self.slot0 + k) % FC_SLOTS
-                            s[sl] += a[k] - dmean[d]
-                            c[sl] += 1
+                for k in range(k_end - 1):
+                    if a[k] >= 0 and a[k + 1] >= 0:
+                        sl = (self.slot0 + k) % FC_SLOTS
+                        s[sl] += a[k + 1] - a[k]
+                        c[sl] += 1
+                if not any(c):
+                    continue
                 raw[(sid, j)] = (s, c)
                 for key in ("b:" + brands.get(sid, ""), "g:"):
                     ps, pc = pool.setdefault((key, j), ([0.0] * FC_SLOTS, [0] * FC_SLOTS))
                     for i in range(FC_SLOTS):
                         ps[i] += s[i]
                         pc[i] += c[i]
-                diffs[j] += [dmean[b] - dmean[a_] for a_, b in zip(days[-4:], days[-3:]) if b == a_ + 1]
-        self.prof = {}
+        self.cum = {}
         for (sid, j), (s, c) in raw.items():
             gs, gc = pool[("g:", j)]
             g = [gs[i] / gc[i] if gc[i] else 0.0 for i in range(FC_SLOTS)]
             bs, bc = pool[("b:" + brands.get(sid, ""), j)]
             b = [(bs[i] + FC_PRIOR * g[i]) / (bc[i] + FC_PRIOR) for i in range(FC_SLOTS)]
-            self.prof[(sid, j)] = [(s[i] + FC_PRIOR * b[i]) / (c[i] + FC_PRIOR) for i in range(FC_SLOTS)]
-        # Trend: Median der Tagesmittel-Änderungen, gedämpft und begrenzt (je Rasterschritt)
-        self.trend = {j: max(-15, min(15, statistics.median(v) * 0.5)) / FC_SLOTS if v else 0.0 for j, v in diffs.items()}
+            m = [(s[i] + FC_PRIOR * b[i]) / (c[i] + FC_PRIOR) for i in range(FC_SLOTS)]
+            cum = [0.0]
+            for i in range(2 * FC_SLOTS):            # aufsummiert über zwei Tage, damit jeder Startpunkt passt
+                cum.append(cum[-1] + m[i % FC_SLOTS])
+            self.cum[(sid, j)] = cum
 
-    def predict(self, sid, j, a, k, h, use_trend):
+    def predict(self, sid, j, a, k, h):
         """(Prognose, letzter Preis) für Rasterpunkt k + h, bekannt sind Daten bis einschließlich k."""
-        P = self.prof.get((sid, j))
-        if P is None:
+        cum = self.cum.get((sid, j))
+        if cum is None:
             return None, None
         ka = k
         while ka >= 0 and k - ka < FC_SLOTS and a[ka] < 0:
             ka -= 1
         if ka < 0 or a[ka] < 0:
             return None, None
-        v = a[ka] - P[(self.slot0 + ka) % FC_SLOTS] + P[(self.slot0 + k + h) % FC_SLOTS]
-        if use_trend:
-            v += self.trend[j] * (k + h - ka)
-        return v, a[ka]
+        s0 = (self.slot0 + ka) % FC_SLOTS
+        days, rest = divmod(k + h - ka, FC_SLOTS)
+        return a[ka] + days * cum[FC_SLOTS] + cum[s0 + rest] - cum[s0], a[ka]
 
 
 def fc_build(store, now=None):
@@ -1032,22 +1062,21 @@ def fc_build(store, now=None):
     brands = {sid: nice_station(info)["brand"] for sid, info in st.items()}
     t0, n, grid = fc_grid(store, now - timedelta(days=FC_TRAIN_DAYS), now)
     first = min((k for arrs in grid.values() for a in arrs for k in range(n) if a[k] >= 0), default=None)
-    res = {"t0": t0, "n": n, "grid": grid, "days": 0.0, "errors": {}, "use_trend": False, "model": None,
-           "available_from": None}
+    res = {"t0": t0, "n": n, "grid": grid, "days": 0.0, "errors": {}, "model": None, "available_from": None}
     if first is None:
         return res
     k_last = n - 1
     res["days"] = (k_last - first) / FC_SLOTS
-    test = min(2 * FC_SLOTS, k_last + 1 - first - FC_MIN_TRAIN_DAYS * FC_SLOTS)
+    # Geprüft wird immer über ganze Tage (1 oder 2), damit die ruhige Nacht nicht allein zählt
+    test = min(2, (k_last + 1 - first - FC_MIN_TRAIN_DAYS * FC_SLOTS) // FC_SLOTS) * FC_SLOTS
     if test < FC_MIN_TEST_STEPS:
         res["available_from"] = t0 + timedelta(minutes=FC_STEP_MIN * (first + FC_MIN_TRAIN_DAYS * FC_SLOTS + FC_MIN_TEST_STEPS))
     else:
         # Rückblick-Test: lernen bis k_split, dann alle 2 Stunden 1–12 Stunden voraus prognostizieren
         k_split = k_last + 1 - test
         m = FcModel(t0, grid, brands, k_split)
-        tot = [0.0, 0.0]
         for sid, arrs in grid.items():
-            e = [[0.0, 0.0, 0.0, 0] for _ in range(FC_EVAL_H)]   # Modell, Modell+Trend, unverändert, Anzahl
+            e = [[0.0, 0.0, 0] for _ in range(FC_EVAL_H)]   # Fehler Modell, Fehler "bleibt gleich", Anzahl
             for j, a in enumerate(arrs):
                 for o in range(k_split, k_last, 8):
                     for hh in range(1, FC_EVAL_H + 1):
@@ -1056,15 +1085,12 @@ def fc_build(store, now=None):
                             break
                         if a[o + h] < 0:
                             continue
-                        pm, naive = m.predict(sid, j, a, o, h, False)
+                        pm, naive = m.predict(sid, j, a, o, h)
                         if pm is None:
                             continue
-                        pt, _ = m.predict(sid, j, a, o, h, True)
                         r = e[hh - 1]
-                        r[0] += abs(pm - a[o + h]); r[1] += abs(pt - a[o + h]); r[2] += abs(naive - a[o + h]); r[3] += 1
-                        tot[0] += abs(pm - a[o + h]); tot[1] += abs(pt - a[o + h])
+                        r[0] += abs(pm - a[o + h]); r[1] += abs(naive - a[o + h]); r[2] += 1
             res["errors"][sid] = e
-        res["use_trend"] = tot[1] < tot[0]
         res["model"] = FcModel(t0, grid, brands, n)   # für die echte Prognose mit allen Daten
     return res
 
@@ -1075,11 +1101,10 @@ def fc_export(fc, inside, now):
            "available_from": fc["available_from"].isoformat(timespec="minutes") if fc["available_from"] else None}
     if not fc["errors"]:
         return out
-    col = 1 if fc["use_trend"] else 0
     agg = [[0.0, 0.0, 0] for _ in range(FC_EVAL_H)]
     for sid in inside:
         for hh, r in enumerate(fc["errors"].get(sid, [])):
-            agg[hh][0] += r[col]; agg[hh][1] += r[2]; agg[hh][2] += r[3]
+            agg[hh][0] += r[0]; agg[hh][1] += r[1]; agg[hh][2] += r[2]
     cnt = sum(a[2] for a in agg)
     if not cnt:
         return out
@@ -1087,7 +1112,7 @@ def fc_export(fc, inside, now):
     naive = [round(a[1] / a[2] / 10, 2) if a[2] else None for a in agg]
     m_all, n_all = sum(a[0] for a in agg) / cnt, sum(a[1] for a in agg) / cnt
     out.update({"quality": {"mae": mae, "naive": naive, "mae_avg": round(m_all / 10, 2), "naive_avg": round(n_all / 10, 2), "n": cnt},
-                "trend": fc["use_trend"]})
+                "trend": False})
     out["ok"] = cnt >= 300 and m_all <= (1 - FC_MIN_GAIN) * n_all
     if not out["ok"] or fc["model"] is None:
         return out
@@ -1104,7 +1129,7 @@ def fc_export(fc, inside, now):
             vals = []
             for i in range(FC_HORIZON_H):
                 h = round((start + timedelta(hours=i) - t_last) / timedelta(minutes=FC_STEP_MIN))
-                v, _ = m.predict(sid, j, arrs[j], n - 1, h, fc["use_trend"])
+                v, _ = m.predict(sid, j, arrs[j], n - 1, h)
                 vals.append(None if v is None else round(v))
             if any(v is not None for v in vals):
                 stations.setdefault(sid, {})[f] = vals
@@ -1291,23 +1316,26 @@ def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     ap = argparse.ArgumentParser(description="Tankpreis-Monitor Uhingen (73066)")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("fetch", help="Preise einmalig abrufen und speichern")
+    fp = sub.add_parser("fetch", help="Preise einmalig abrufen und speichern")
+    fp.add_argument("--min-interval", type=int, default=5, help="Mindestabstand zum letzten Abruf in Minuten")
     rp = sub.add_parser("report", help="Wochenauswertung erstellen")
     rp.add_argument("--days", type=int, default=7)
     rp.add_argument("--end", help="Ende des Zeitraums (exklusiv), YYYY-MM-DD; Standard: heute")
-    sub.add_parser("export", help="Daten für die Web-App (docs/data) aktualisieren")
+    ep = sub.add_parser("export", help="Daten für die Web-App (docs/data) aktualisieren")
+    ep.add_argument("--ensure-report", action="store_true", help="fehlenden Wochenreport der Vorwoche nachholen")
     sub.add_parser("run", help="Dauerbetrieb (stündlicher Abruf + Wochenreport)")
     dp = sub.add_parser("demo", help="Testdaten erzeugen")
     dp.add_argument("--weeks", type=int, default=2)
     a = ap.parse_args()
     cfg = load_config()
     if a.cmd == "fetch":
-        cmd_fetch(cfg)
+        cmd_fetch(cfg, timedelta(minutes=a.min_interval))
     elif a.cmd == "report":
         end = datetime.strptime(a.end, "%Y-%m-%d") if a.end else None
         cmd_report(cfg, a.days, end)
     elif a.cmd == "export":
-        cmd_export(cfg)
+        if not (a.ensure_report and ensure_report(cfg)):   # ein nachgeholter Report exportiert selbst
+            cmd_export(cfg)
     elif a.cmd == "run":
         cmd_run(cfg)
     elif a.cmd == "demo":

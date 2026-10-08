@@ -122,10 +122,14 @@ button{font:inherit;border:0;cursor:pointer;color:inherit;background:none}
 /* Tankzeit-Tipp */
 .tiphead{display:flex;gap:12px;align-items:center}
 .tiphead .ic{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:var(--acc-glow);color:var(--acc-ink);flex:none}
-.tiphead b{font-size:17px}
+.tiphead b{font-size:17px}.tiphead .sub b{font-size:inherit}
 .verdict{margin:10px 0 0;font-size:14px;color:var(--muted)}
 .verdict b{color:var(--fg)}
 .quip{margin:12px 0 0;font-size:14px;color:var(--muted)}
+.noon.soon{box-shadow:inset 0 0 0 2px var(--acc),var(--shadow)}
+.noon .cd{font-variant-numeric:tabular-nums}
+.valuecard .price1{font-size:21px;font-weight:750;letter-spacing:-.02em;flex:none}
+.two-in{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 
 /* Liste */
 .chips{display:flex;gap:8px;margin:0 0 10px;flex-wrap:wrap}
@@ -390,8 +394,14 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     <input id="inRepo" placeholder="benutzer/tankpreise" autocapitalize="off" autocorrect="off" spellcheck="false">
     <label for="inToken">GitHub-Zugangsschlüssel</label>
     <input id="inToken" type="password" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label for="inTokExp">Schlüssel gültig bis <span class="small">(steht bei GitHub beim Schlüssel – die App erinnert 14 Tage vorher)</span></label>
+    <input id="inTokExp" type="date">
     <label for="inTk">Tankerkönig-Schlüssel <span class="small">(optional, für Live-Preise außerhalb der Bases)</span></label>
     <input id="inTk" type="password" placeholder="xxxxxxxx-xxxx-…" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <div class="two-in">
+      <div><label for="inTank">Tankmenge (Liter)</label><input id="inTank" type="text" inputmode="decimal" placeholder="50"></div>
+      <div><label for="inCons">Verbrauch (l/100 km)</label><input id="inCons" type="text" inputmode="decimal" placeholder="7"></div>
+    </div>
     <label class="check"><input id="inDialect" type="checkbox"> <span>Auf Schwäbisch <span class="small">(Tipps, Überschriften, Wochenfazit)</span></span></label>
     <div class="actions">
       <button class="btn secondary" value="cancel">Abbrechen</button>
@@ -415,6 +425,10 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
   const WD = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
   // Auf Schwäbisch (abschaltbar unter ⚙): Tipps, Überschriften und kurze Hinweise. say(schwäbisch, hochdeutsch)
   const SW = () => store.get("dialect", "1") === "1";
+  // Kosten einer Tankfüllung inkl. Hin- und Rückfahrt (Fahrstrecke ≈ 1,3 × Luftlinie)
+  const num = (k, d, lo, hi) => Math.min(hi, Math.max(lo, Number(String(store.get(k, d)).replace(",", ".")) || Number(d)));
+  const TANK = () => num("tank", "50", 5, 150), CONS = () => num("cons", "7", 2, 30), ROAD = 1.3;
+  const fillCost = (s, f = fuel) => s[f] * (TANK() + 2 * (s.dist || 0) * ROAD * CONS() / 100);
   const say = (schw, hoch) => SW() ? schw : hoch;
   const WD_LONG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
   const WD_SCHW = ["Mendig", "Dienschdig", "Mittwoch", "Donnschdig", "Freidig", "Samschdig", "Sonndig"];
@@ -936,6 +950,11 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     }
     let h = "";
     h += `<div id="health">${healthHtml}</div>`;
+    const exp = store.get("tokenExp", ""), left = exp ? Math.ceil((new Date(exp + "T23:59:59") - Date.now()) / 864e5) : null;
+    if (token() && left != null && left <= 14)
+      h += `<div class="card notice warnbox"><span class="ic">🔑</span><div><b>${left < 0 ? "GitHub-Schlüssel ist abgelaufen" : `GitHub-Schlüssel läuft ${left === 0 ? "heute" : left === 1 ? "morgen" : `in ${left} Tagen`} ab`}</b><br>
+        Bei GitHub neu erstellen (oder „Regenerate“) und unter ⚙ eintragen – sonst kommen keine Preise mehr an.
+        <div class="row" style="margin-top:10px"><a class="btn secondary" href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener">Zu GitHub</a><button class="btn" id="btnSetup">Einstellungen</button></div></div></div>`;
     if (view.src.type === "partial")
       h += `<div class="card notice"><span class="ic">ℹ️</span><div><b>Teilweise außerhalb deiner Bases.</b> Es werden nur Tankstellen aus ${esc(view.base.name)} angezeigt. Für vollständige Live-Preise trage unter ⚙ deinen Tankerkönig-Schlüssel ein.</div></div>`;
     if (view.src.type === "none")
@@ -946,20 +965,31 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     const others = view.stations.filter((s) => !hasPrice(s)).sort((a, b) => a.dist - b.dist);
     const best = withPrice[0];
     const avgNow = mean(withPrice.map((s) => s[fuel]));
+    const near = withPrice.length ? withPrice.reduce((a, b) => a.dist <= b.dist ? a : b) : null;
+    const smart = withPrice.length ? withPrice.reduce((a, b) => fillCost(a) <= fillCost(b) ? a : b) : null;
+    let drive = "";
+    if (best && near && best.id !== near.id && best.dist != null) {
+      const net = fillCost(near) - fillCost(best), trip = km(2 * best.dist * ROAD);
+      drive = smart.id === best.id
+        ? (net > 0.05 ? say(`🚗 Lohnt sich au mit Anfahrt: ${eur2(net)} gspart gegenüber dr nächschde Tankstell.`, `🚗 Lohnt sich auch mit Anfahrt: ${eur2(net)} gespart gegenüber der nächsten Tankstelle.`) : "")
+        : net <= 0 ? say(`🚗 Mit Hin- ond Rückfahrt (≈ ${trip}) zahlsch do ${eur2(-net)} drauf – unte steht, wo sich's lohnt.`, `🚗 Mit Hin- und Rückfahrt (≈ ${trip}) zahlst du hier ${eur2(-net)} drauf – unten steht, wo es sich lohnt.`)
+        : say(`🚗 Mit Anfahrt bleibet bloß ${eur2(net)} – unte lohnt sich's mehr.`, `🚗 Mit Anfahrt bleiben nur ${eur2(net)} – unten lohnt es sich mehr.`);
+    }
 
     if (best) {
       const stt = state(best), save = avgNow - best[fuel];
       h += `<section class="card hero">
         <span class="eyebrow">${say("Am billigschde", "Günstigste")} · ${FUELS[fuel]} · ${radius} km</span>
         <div class="pricerow"><div class="price">${price(best[fuel])}<span class="cur">€</span></div>
-          ${withPrice.length > 1 && save > 0.0005 ? `<div class="save"><span class="eyebrow">${say("Gspart", "Ersparnis")}</span><b>${eur2(save * 50)}</b><span>bei 50 l ggü. Ø</span></div>` : ""}</div>
+          ${withPrice.length > 1 && save > 0.0005 ? `<div class="save"><span class="eyebrow">${say("Gspart", "Ersparnis")}</span><b>${eur2(save * TANK())}</b><span>bei ${fmtNum(TANK(), 0)} l ggü. Ø</span></div>` : ""}</div>
         <div class="station">${badge(best, lv(best), "lg")}
           <div style="min-width:0"><div class="where">${esc(best.brand)} · ${esc(best.place)}</div>
           <div class="sub">${esc(best.street)} · ${km(best.dist)}${stt.short ? " · " + esc(stt.short) : ""}</div></div></div>
         <div class="row" id="heroPills">
           ${withPrice.length > 1 && save > 0.0005 ? pill(-save, `${ct(-save)} unter Ø`) : ""}
         </div>
-        ${SW() && withPrice.length > 1 && save > 0.0005 ? `<p class="quip">🥨 ${brezel(save * 50)}</p>` : ""}
+        ${SW() && withPrice.length > 1 && save > 0.0005 ? `<p class="quip">🥨 ${brezel(save * TANK())}</p>` : ""}
+        ${drive ? `<p class="quip">${drive}</p>` : ""}
         <div class="row two">
           <button class="btn" data-route="${esc(best.id)}">${NAV} Route</button>
           <button class="btn secondary" data-detail="${esc(best.id)}">Details</button>
@@ -968,14 +998,32 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     } else if (view.src.type !== "none") {
       h += `<div class="card empty"><div class="bigic">🌙</div><b>${say("Grad hot älles zu", "Gerade alles zu")}</b><p>${say(`Im Umkreis vo ${radius} km hot koi Tankstell mit ${FUELS[fuel]} offa. Morga isch au no a Dag.`, `Im Umkreis von ${radius} km ist keine Tankstelle mit ${FUELS[fuel]} geöffnet.`)}</p></div>`;
     }
-    h += `<div id="tip"></div><div id="fc"></div>`;
+    if (best && smart && smart.id !== best.id) {
+      const gain = fillCost(near) - fillCost(smart);
+      h += `<section class="card valuecard">
+        <div class="tiphead"><div class="ic">🚗</div><div><b>${say("Lohnt sich am meischda", "Lohnt sich am meisten")}</b>
+          <div class="sub">ab ${esc(view.center.label)} · ${say("inkl. Hin- ond Rückfahrt", "inkl. Hin- und Rückfahrt")} · ${fmtNum(TANK(), 0)} l · ${fmtNum(CONS(), 1)} l/100 km</div></div></div>
+        <div class="station" style="margin-top:14px">${badge(smart, lv(smart))}
+          <div style="min-width:0;flex:1"><div class="where" style="font-size:16px">${esc(smart.brand)} · ${esc(smart.place)}</div>
+          <div class="sub">${esc(smart.street)} · ${km(smart.dist)}</div></div><div class="price1">${price(smart[fuel])}</div></div>
+        <p class="verdict">${smart.id === near.id
+          ? say("Glei die nächschde Tankstell isch unterm Strich am günstigschda – a Umweg lohnt sich grad net.", "Gleich die nächste Tankstelle ist unterm Strich am günstigsten – ein Umweg lohnt sich gerade nicht.")
+          : say(`Unterm Strich <b>${eur2(gain)} billiger</b> als an dr nächschde Tankstell (${esc(near.brand)}, ${km(near.dist)}).`, `Unterm Strich <b>${eur2(gain)} günstiger</b> als an der nächsten Tankstelle (${esc(near.brand)}, ${km(near.dist)}).`)}</p>
+        <div class="row two">
+          <button class="btn" data-route="${esc(smart.id)}">${NAV} Route</button>
+          <button class="btn secondary" data-detail="${esc(smart.id)}">Details</button>
+        </div>
+      </section>`;
+    }
+    h += `<div id="noon"></div><div id="tip"></div><div id="fc"></div>`;
 
     if (view.stations.length) {
       h += `<div class="sec"><h2>${say("Tankstella", "Tankstellen")}</h2>
         <div class="seg mini"><button data-view="list" class="${viewMode === "list" ? "on" : ""}">Liste</button><button data-view="map" class="${viewMode === "map" ? "on" : ""}">Karte</button></div></div>
         <div class="chips">
           ${viewMode === "list" ? `<button class="chip ${sortBy === "price" ? "on" : ""}" data-sort="price">Nach Preis</button>
-          <button class="chip ${sortBy === "dist" ? "on" : ""}" data-sort="dist">Nach Entfernung</button>` : ""}
+          <button class="chip ${sortBy === "dist" ? "on" : ""}" data-sort="dist">Nach Entfernung</button>
+          <button class="chip ${sortBy === "value" ? "on" : ""}" data-sort="value">Inkl. Anfahrt</button>` : ""}
           <button class="chip ${onlyOpen ? "on" : ""}" data-open>Nur geöffnete</button>
         </div>${LV_LEGEND}`;
       if (viewMode === "map") {
@@ -983,6 +1031,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
       } else {
         let list = [...withPrice, ...(onlyOpen ? [] : others)];
         if (sortBy === "dist") list = [...list].sort((a, b) => a.dist - b.dist);
+        if (sortBy === "value") list = [...withPrice].sort((a, b) => fillCost(a) - fillCost(b)).concat(onlyOpen ? [] : others);
         h += `<div class="list">`;
         for (const s of list.slice(0, 60)) {
           const has = hasPrice(s), stt = state(s);
@@ -1011,6 +1060,54 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     renderAnalysis();
   }
 
+  // ---- 12-Uhr-Regel: Erhöhungen gibt es (fast) nur um 12 Uhr – erkannt aus den beobachteten Änderungen
+  let noonCtx = null;
+  function noonInfo(chg, ids, f) {
+    let ups = 0;
+    const jumps = [];
+    for (const id of ids) for (const e of stationEvents(chg, id, f)) {
+      if (e.d <= 0) continue;
+      ups++;
+      // Zeitraum der Erhöhung überschneidet 12–13 Uhr (manche Tankstellen erhöhen erst ein paar Minuten nach 12)
+      const to = e.to || e.t, from = e.from || e.t, a = new Date(to), b = new Date(to);
+      a.setHours(12, 0, 0, 0); b.setHours(13, 0, 0, 0);
+      if (from < b && to >= a) jumps.push(e.d);
+    }
+    return ups >= 10 && jumps.length / ups >= 0.8 ? { share: jumps.length / ups, avgUp: mean(jumps) } : null;
+  }
+  const dur = (min) => {
+    const h = Math.floor(min / 60), m = min % 60;
+    return SW() ? [h ? `${h} Stond` : "", m || !h ? `${m} Minuta` : ""].filter(Boolean).join(" ") : [h ? `${h} Std.` : "", m || !h ? `${m} Min.` : ""].filter(Boolean).join(" ");
+  };
+  function renderNoon() {
+    const el = $("#noon");
+    if (!el) return;
+    if (!noonCtx) { el.innerHTML = ""; return; }
+    const { info, recover } = noonCtx, now = new Date(), mins = now.getHours() * 60 + now.getMinutes();
+    const up = fmtNum(info.avgUp * 100, 1), eurUp = eur2(info.avgUp * TANK()), L = fmtNum(TANK(), 0);
+    let title, sub, soon = false;
+    if (mins < 720) {
+      const left = 720 - mins;
+      soon = left <= 60;
+      title = say(`${soon ? "Etz aber gschwind: " : ""}no <span class="cd">${dur(left)}</span> bis zum Preissprung`, `${soon ? "Jetzt schnell: " : ""}noch <span class="cd">${dur(left)}</span> bis zur Preiserhöhung`);
+      sub = say(`Um 12 Uhr ganget d'Preis nauf – im Schnitt um ${up} ct. Vorher tanka spart bei ${L} l rund ${eurUp} gegenüber direkt danach.`,
+        `Um 12 Uhr steigen die Preise – im Schnitt um ${up} ct. Vorher tanken spart bei ${L} l rund ${eurUp} gegenüber direkt danach.`);
+    } else if (recover == null || now.getHours() < recover) {
+      title = say("Grad erscht nauf gange", "Gerade erst erhöht");
+      sub = say(`Um 12 Uhr isch's im Schnitt um ${up} ct nauf. ${recover ? `Bis etwa ${recover} Uhr wird's Stück für Stück billiger` : "Bis zum Obend wird's wieder billiger"} – wenn's net pressiert: warta.`,
+        `Um 12 Uhr ging es im Schnitt um ${up} ct nach oben. ${recover ? `Bis etwa ${recover} Uhr wird es Schritt für Schritt günstiger` : "Bis zum Abend wird es wieder günstiger"} – wenn möglich warten.`);
+    } else {
+      title = say("Bis morga 12 Uhr bleibt's billig", "Bis morgen 12 Uhr bleibt es günstig");
+      sub = say(`Nauf goht's erscht wieder morga um 12 Uhr (im Schnitt +${up} ct). Bis dahin ka mr in Ruh tanka.`,
+        `Erhöht wird erst wieder morgen um 12 Uhr (im Schnitt +${up} ct). Bis dahin kann man in Ruhe tanken.`);
+    }
+    el.innerHTML = `<section class="card noon${soon ? " soon" : ""}"><div class="tiphead"><div class="ic">⏰</div><div><b>${title}</b>
+      <div class="sub">${sub}</div></div></div>
+      <p class="small" style="margin:10px 0 0">${NOON_LAW} Beobachtet: ${fmtNum(info.share * 100, 0)} % aller Preiserhöhungen der letzten Tage lagen zwischen 12 und 13 Uhr.</p></section>`;
+  }
+  const NOON_LAW = "";
+  setInterval(() => { if (!document.hidden) renderNoon(); }, 30000);
+
   function renderAnalysis() {
     if (!view || view.error || !$("#analysis")) return;
     if (view.live) {
@@ -1021,6 +1118,15 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     if (!cache?.history) { $("#analysis").innerHTML = `<div class="skel" style="height:220px;margin-top:28px"></div>`; return; }
     const ids = view.stations.map((s) => s.id);
     const sum = analyse(cache.history, ids, fuel);
+    const ninfo = noonInfo(cache.changes, ids, fuel);
+    if (ninfo) {
+      // ab wann die Senkungen nach dem Sprung auslaufen (≤ 0,5 ct über dem Tiefstand des Nachmittags/Abends)
+      const aft = [...Array(11).keys()].map((i) => 13 + i).filter((h) => sum?.hourAvg?.[h] != null);
+      const low = Math.min(...aft.map((h) => sum.hourAvg[h]));
+      const rec = aft.find((h) => sum.hourAvg[h] <= low + 0.005);
+      noonCtx = { info: ninfo, recover: rec ?? null };
+    } else noonCtx = null;
+    renderNoon();
     if (!sum) { $("#analysis").innerHTML = ""; return; }
     if (sum.trend != null && $("#heroPills") && !$("#heroPills .trend"))
       $("#heroPills").insertAdjacentHTML("beforeend", pill(sum.trend, `Woche ${ct(sum.trend)}`, "trend"));
@@ -1651,6 +1757,9 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     $("#inToken").value = token();
     $("#inTk").value = store.get("tk", "");
     $("#inDialect").checked = SW();
+    $("#inTokExp").value = store.get("tokenExp", "");
+    $("#inTank").value = fmtNum(TANK(), 0);
+    $("#inCons").value = fmtNum(CONS(), 1);
     $("#testOut").innerHTML = "";
     $("#dlg").showModal();
   }
@@ -1659,6 +1768,9 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     store.set("token", $("#inToken").value.trim());
     store.set("tk", $("#inTk").value.trim());
     store.set("dialect", $("#inDialect").checked ? "1" : "0");
+    store.set("tokenExp", $("#inTokExp").value);
+    store.set("tank", $("#inTank").value || "50");
+    store.set("cons", $("#inCons").value || "7");
     dataMode = null; bases = [];
   }
   // Prüft Schlüssel und Rechte, ohne etwas auszulösen: Ein Start auf einen nicht

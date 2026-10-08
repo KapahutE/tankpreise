@@ -1,0 +1,42 @@
+name: Weiterleitung zur App
+
+# Die frühere Adresse kapahute.github.io/tankpreise/ leitet auf die App um (gleiche Domain,
+# gespeicherte Einstellungen und Schlüssel bleiben erhalten). Läuft nur, wenn sich diese Datei ändert.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/weiterleitung.yml"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  pages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Weiterleitungsseite bauen
+        run: |
+          mkdir site && touch site/.nojekyll
+          cat > site/index.html <<'HTML'
+          <!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>Schwabensprit</title><meta http-equiv="refresh" content="0; url=https://kapahute.github.io/Schwabensprit-app/">
+          <p style="font:17px system-ui;margin:40px">Schwabensprit isch umzoga:
+          <a href="https://kapahute.github.io/Schwabensprit-app/">zur App</a></p></html>
+          HTML
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v5

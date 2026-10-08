@@ -2,7 +2,9 @@ name: Tankpreise
 
 on:
   schedule:
-    - cron: "1,16,31,46 * * * *"   # alle 15 Minuten Preise abrufen (:01, :16, :31, :46)
+    # Alle 5 Minuten starten, abgerufen wird aber höchstens alle ~15 Minuten (Sperre im Programm).
+    # GitHub lässt geplante Läufe bei hoher Last gern aus – so fängt der nächste Termin das auf.
+    - cron: "1-59/5 * * * *"
     - cron: "37 4 * * 1"             # montags früh (06:37 Sommer- / 05:37 Winterzeit): Wochenreport
   workflow_dispatch:         # manueller Start, z. B. über den Knopf in der iPhone-App
     inputs:
@@ -14,23 +16,17 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 env:
   TZ: Europe/Berlin
 
 jobs:
-  # Daten abrufen und speichern – bewusst ohne "github-pages"-Umgebung, damit eine hängende
-  # Veröffentlichung die Abrufe nicht mehr blockieren kann.
   tankpreise:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
       group: tankpreise
       cancel-in-progress: false
-    outputs:
-      public: ${{ steps.repo.outputs.public }}
     steps:
       - uses: actions/checkout@v7
 
@@ -38,18 +34,24 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Abrufen bzw. Wochenreport erstellen
+      - name: Preise abrufen
+        id: fetch
+        if: github.event.schedule != '37 4 * * 1' && inputs.aktion != 'report'
         env:
           TANKERKOENIG_API_KEY: ${{ secrets.TANKERKOENIG_API_KEY }}
-        run: |
-          if [ "${{ github.event.schedule }}" = "37 4 * * 1" ] || [ "${{ inputs.aktion }}" = "report" ]; then
-            python tankpreise.py report
-          else
-            python tankpreise.py fetch
-            python tankpreise.py export
-          fi
+        # geplante Läufe: frühestens 13 Minuten nach dem letzten Abruf; Knopf in der App: nach 5 Minuten
+        run: python tankpreise.py fetch --min-interval ${{ github.event_name == 'schedule' && 13 || 5 }}
+
+      - name: Auswerten (und ausgefallenen Wochenreport nachholen)
+        if: steps.fetch.outputs.fetched == 'true'
+        run: python tankpreise.py export --ensure-report
+
+      - name: Wochenreport erstellen
+        if: github.event.schedule == '37 4 * * 1' || inputs.aktion == 'report'
+        run: python tankpreise.py report
 
       - name: Daten im Repository speichern
+        if: steps.fetch.outputs.fetched == 'true' || github.event.schedule == '37 4 * * 1' || inputs.aktion == 'report'
         run: |
           git config user.name "tankpreise-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -59,30 +61,6 @@ jobs:
           for i in 1 2 3 4; do git pull -q --rebase && git push -q && exit 0; sleep $((2**i)); done
           exit 1
 
-      # Webseite nur bei öffentlichem Repository; bei privatem lädt die App die Daten über die GitHub-API
-      - id: repo
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: echo "public=$(gh api repos/${{ github.repository }} --jq '.private == false')" >> "$GITHUB_OUTPUT"
-      - if: steps.repo.outputs.public == 'true'
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: docs
-
-  # Webseite veröffentlichen. Eigene Warteschlange: Eine neuere Veröffentlichung ersetzt eine
-  # wartende oder hängende ältere.
-  pages:
-    needs: tankpreise
-    if: needs.tankpreise.outputs.public == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    concurrency:
-      group: pages
-      cancel-in-progress: true
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - uses: actions/configure-pages@v6
-      - id: deploy
-        uses: actions/deploy-pages@v5
+  # Die Webseite dieses Repositorys wird nicht mehr bei jedem Abruf veröffentlicht: Die App
+  # (Schwabensprit-app) liest die Daten direkt aus dem Repository. Die alte Adresse leitet über
+  # weiterleitung.yml auf die App um.
