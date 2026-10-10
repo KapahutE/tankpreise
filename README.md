@@ -9,6 +9,7 @@ Datenquelle: [Tankerkönig-API](https://creativecommons.tankerkoenig.de/) (amtli
 
 ## Was die iPhone-App zeigt
 
+- **bis zu 3 Favoriten** ganz oben, je eine Zeile mit aktuellem Preis und Abstand zum günstigsten Preis im Umkreis (☆ in der Detailansicht; gespeichert auf dem Gerät; Favoriten außerhalb des gewählten Umkreises werden aus der passenden Base nachgeladen)
 - die gerade günstigste Tankstelle, mit Knopf „Route starten“ (Apple Karten)
 - alle Tankstellen nach Preis sortiert, umschaltbar zwischen E5, E10 und Diesel
 - einen Tipp zur besten Tankzeit und ob sich Tanken gerade lohnt. Tipps, Überschriften und das „Fazit vo dr Woch“ im Wochenreport sind standardmäßig auf Schwäbisch; Zahlen, Diagramme und Hinweise bleiben hochdeutsch (unter ⚙ „Auf Schwäbisch“ abschaltbar)

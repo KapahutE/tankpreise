@@ -130,6 +130,25 @@ button{font:inherit;border:0;cursor:pointer;color:inherit;background:none}
 .noon .cd{font-variant-numeric:tabular-nums}
 .valuecard .price1{font-size:21px;font-weight:750;letter-spacing:-.02em;flex:none}
 .two-in{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+/* Favoriten */
+.favcard{padding:12px 14px 6px}
+.favhead{display:flex;align-items:center;justify-content:space-between;margin:0 0 4px}
+.favhead b{font-size:15px}.favhead button{font-size:14px;font-weight:650;color:var(--acc-ink);padding:4px 0}
+.frow{display:flex;align-items:center;gap:10px;width:100%;padding:7px 0;border-top:1px solid var(--line);text-align:left;color:inherit}
+.frow:first-of-type{border-top:0}
+.frow .badge{width:32px;height:32px;border-radius:10px;font-size:12px}.frow .badge.t3{font-size:9.5px}
+.frow .nm{flex:1;min-width:0;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frow .nm span{color:var(--muted);font-weight:500}
+.frow .pr{font-weight:750;font-size:17px;font-variant-numeric:tabular-nums;flex:none}.frow .pr sup{font-size:10px}
+.frow .df{width:66px;text-align:right;font-size:13px;color:var(--muted);flex:none;font-variant-numeric:tabular-nums}
+.frow .df.lo{color:var(--lo)}.frow .df.hi{color:var(--hi)}
+.frow .st{flex:none;font-size:13px;color:var(--muted)}
+.favbtn{flex:none;margin-left:auto;font-size:26px;line-height:1;color:var(--acc);padding:6px}
+.favstar{color:var(--acc);font-size:12px}
+.favedit{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--line)}
+.favedit .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.favedit button{width:36px;height:36px;border-radius:10px;background:var(--seg);font-size:15px;flex:none}
+.favedit button:disabled{opacity:.3}
 
 /* Liste */
 .chips{display:flex;gap:8px;margin:0 0 10px;flex-wrap:wrap}
@@ -358,6 +377,15 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
 
 <div id="detail" aria-hidden="true"><div class="wrap" id="detailBody"></div></div>
 <div id="report"><div class="bar"><button class="back" id="btnRepBack"><svg width="12" height="20" viewBox="0 0 12 20"><path d="M10 2L2 10l8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Zurück</button></div><iframe id="repFrame" title="Wochenreport"></iframe></div>
+
+<dialog id="dlgFav">
+  <div class="inner">
+    <h3 id="favTitle">Meine Tankstellen</h3>
+    <p class="small" id="favHint"></p>
+    <div id="favList"></div>
+    <div class="actions"><button class="btn secondary block" id="btnFavClose" type="button">Fertig</button></div>
+  </div>
+</dialog>
 
 <dialog id="dlgLoc">
   <div class="inner">
@@ -667,6 +695,115 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
 
   const byId = (id) => view?.stations?.find((s) => s.id === id);
 
+  // ---- Favoriten: bis zu 3 Tankstellen, auf dem Gerät gespeichert (mit Name/Ort/Koordinaten,
+  // damit die Zeile auch lesbar bleibt, wenn die Tankstelle gerade nicht in den Daten ist)
+  const FAV_MAX = 3;
+  let favs = store.getJ("favs", []);
+  const isFav = (id) => favs.some((f) => f.id === id);
+  const saveFavs = () => { store.setJ("favs", favs); renderFavs(); render(); if (detailId) renderDetail(); };
+  let favLive = { at: 0, data: {} }, favBusy = false;
+  // Aktuelle Daten eines Favoriten: aus der Ansicht, sonst aus einer Base, die ihn abdeckt, sonst live
+  function favStation(f) {
+    const inView = byId(f.id);
+    if (inView) return { s: inView, here: true };
+    for (const b of favBases(f)) {
+      const st = baseCache[b.id]?.latest?.stations?.find((x) => x.id === f.id);
+      if (st) return { s: st, here: false };
+    }
+    const lv = favLive.data[f.id];
+    return lv ? { s: { ...f, ...lv }, here: false } : null;
+  }
+  const favBases = (f) => f.lat == null ? [] : bases.filter((b) => distKm(b.lat, b.lng, f.lat, f.lng) <= b.radius_km + 0.05);
+  async function loadFavData() {
+    if (favBusy || !favs.length || !bases.length) return;
+    favBusy = true;
+    try {
+      const need = favs.filter((f) => !favStation(f));
+      const bs = [...new Set(need.flatMap((f) => favBases(f).slice(0, 1)))];
+      await Promise.all(bs.filter((b) => !baseCache[b.id]).map((b) => loadBaseData(b).catch(() => null)));
+      const live = favs.filter((f) => !favStation(f) && !favBases(f).length);
+      if (live.length && store.get("tk", "") && Date.now() - favLive.at > 5 * 60000) {
+        const r = await fetch(`${TK}/prices.php?ids=${live.map((f) => f.id).join(",")}&apikey=${encodeURIComponent(store.get("tk", ""))}`);
+        const d = await r.json();
+        if (d.ok) {
+          favLive = { at: Date.now(), data: {} };
+          for (const [id, p] of Object.entries(d.prices || {}))
+            favLive.data[id] = { open: p.status === "open", e5: p.e5 || null, e10: p.e10 || null, diesel: p.diesel || null };
+        }
+      }
+    } catch {} finally { favBusy = false; }
+    renderFavs();
+  }
+  function renderFavs() {
+    const el = $("#favs");
+    if (!el) return;
+    if (!favs.length || !view || view.error) { el.innerHTML = ""; return; }
+    const priced = view.stations.filter((x) => hasPrice(x));
+    const best = priced.length ? Math.min(...priced.map((x) => x[fuel])) : null, lv = levelFn();
+    let missing = false;
+    const rows = favs.map((f) => {
+      const hit = favStation(f), s = hit?.s;
+      if (!hit) missing = true;
+      let right;
+      if (!s) right = `<span class="st">${favBases(f).length || store.get("tk", "") ? "lädt …" : "kein aktueller Preis"}</span>`;
+      else if (hasPrice(s)) {
+        const d = best == null ? null : s[fuel] - best;
+        const df = d == null ? "" : Math.abs(d) < 0.0005 ? (hit.here ? say("billigschde", "günstigste") : "± 0 ct") : ct(d);
+        right = `<span class="pr">${price(s[fuel])}</span><span class="df ${d != null && d < -0.0005 ? "lo" : d > 0.0005 ? "hi" : ""}">${df}</span>`;
+      } else {
+        const stt = state(s);
+        right = `<span class="st">${stt.open ? `kein ${FUELS[fuel]}` : `zu${stt.short ? " · " + esc(stt.short.replace(/^öffnet /, "ab ")) : ""}`}</span>`;
+      }
+      return `<button class="frow" data-fav="${esc(f.id)}">${badge(s || f, s && hit.here ? lv(s) : s && hasPrice(s) ? "mid" : "off")}
+        <span class="nm">${esc(f.brand)} <span>· ${esc(f.place)}</span></span>${right}</button>`;
+    }).join("");
+    el.innerHTML = `<section class="card favcard"><div class="favhead"><b>★ ${say("Meine Tankstella", "Meine Tankstellen")}</b><button id="btnFavEdit" type="button">Bearbeiten</button></div>${rows}</section>`;
+    if (missing) loadFavData();
+  }
+  function toggleFav(id) {
+    if (isFav(id)) { favs = favs.filter((f) => f.id !== id); toast(say("Aus de Favorita gnomma.", "Aus den Favoriten entfernt.")); return saveFavs(); }
+    const s = byId(id);
+    if (!s) return;
+    const entry = { id: s.id, brand: s.brand, place: s.place, street: s.street, lat: s.lat, lng: s.lng };
+    if (favs.length >= FAV_MAX) return openFavDialog(entry);
+    favs.push(entry); toast(say("★ Als Favorit gmerkt.", "★ Als Favorit gemerkt.")); saveFavs();
+  }
+  // Bearbeiten (sortieren, entfernen) bzw. – wenn schon 3 gemerkt sind – auswählen, welcher ersetzt wird
+  let favReplace = null;
+  function openFavDialog(replaceWith = null) {
+    favReplace = replaceWith;
+    $("#favTitle").textContent = replaceWith ? "Welchen Favoriten ersetzen?" : "Meine Tankstellen";
+    $("#favHint").textContent = replaceWith ? `Es sind schon ${FAV_MAX} Favoriten gemerkt. ${replaceWith.brand} · ${replaceWith.place} ersetzt:` : "Reihenfolge ändern oder entfernen. Neue Favoriten über ☆ in der Detailansicht einer Tankstelle.";
+    paintFavDialog();
+    if (!$("#dlgFav").open) $("#dlgFav").showModal();
+  }
+  function paintFavDialog() {
+    $("#favList").innerHTML = favs.length ? favs.map((f, i) => `<div class="favedit"><span class="nm">${esc(f.brand)} · ${esc(f.place)}</span>
+      ${favReplace ? `<button class="btn" style="width:auto;padding:0 14px" data-favrep="${i}">Ersetzen</button>`
+        : `<button data-favmove="${i}:-1" ${i ? "" : "disabled"} aria-label="nach oben">▲</button><button data-favmove="${i}:1" ${i < favs.length - 1 ? "" : "disabled"} aria-label="nach unten">▼</button><button data-favdel="${i}" aria-label="entfernen">✕</button>`}</div>`).join("")
+      : `<p class="small">Noch keine Favoriten.</p>`;
+  }
+  $("#favList").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.dataset.favrep != null) { favs[+b.dataset.favrep] = favReplace; favReplace = null; $("#dlgFav").close(); toast(say("★ Als Favorit gmerkt.", "★ Als Favorit gemerkt.")); return saveFavs(); }
+    if (b.dataset.favdel != null) favs.splice(+b.dataset.favdel, 1);
+    if (b.dataset.favmove) { const [i, d] = b.dataset.favmove.split(":").map(Number); [favs[i], favs[i + d]] = [favs[i + d], favs[i]]; }
+    paintFavDialog(); saveFavs();
+  });
+  $("#btnFavClose").addEventListener("click", () => { favReplace = null; $("#dlgFav").close(); });
+  // Favorit außerhalb des gewählten Umkreises: zur Base wechseln, die ihn abdeckt, und Details öffnen
+  async function openFav(id) {
+    if (byId(id)) return openDetail(id);
+    const f = favs.find((x) => x.id === id), b = f && favBases(f)[0];
+    if (!b) return toast(store.get("tk", "") ? "Diese Tankstelle liegt außerhalb deiner Bases." : "Kein aktueller Preis – außerhalb deiner Bases. Für Live-Preise unter ⚙ den Tankerkönig-Schlüssel eintragen.", 5000);
+    loc = { mode: "base", baseId: b.id };
+    radius = Math.min(25, Math.max(radius, Math.ceil(distKm(b.lat, b.lng, f.lat, f.lng)) + 1));
+    store.set("radius", String(radius));
+    await load();
+    openDetail(id);
+  }
+
   // ---- Öffnungszeiten
   const toMin = (hm) => { const [h, m] = String(hm).split(":").map(Number); return h * 60 + (m || 0); };
   const fmtHM = (m) => m >= 1440 ? "24:00" : `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
@@ -948,7 +1085,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
         : `<div class="card empty"><div class="bigic">⚠️</div><b>Daten konnten nicht geladen werden</b><p>${esc(view.error.message)} – zum Neuladen nach unten ziehen.</p></div>`;
       return;
     }
-    let h = "";
+    let h = `<div id="favs"></div>`;
     h += `<div id="health">${healthHtml}</div>`;
     const exp = store.get("tokenExp", ""), left = exp ? Math.ceil((new Date(exp + "T23:59:59") - Date.now()) / 864e5) : null;
     if (token() && left != null && left <= 14)
@@ -1038,7 +1175,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
           const d = has && best ? s[fuel] - best[fuel] : null;
           h += `<button class="item${has ? "" : " closed"}" data-detail="${esc(s.id)}">
             ${badge(s, lv(s))}
-            <div class="info"><div class="name"><span>${esc(s.brand)}</span>${stt.open && stt.short ? `<span class="tag">${esc(stt.short)}</span>` : ""}</div>
+            <div class="info"><div class="name"><span>${esc(s.brand)}</span>${isFav(s.id) ? `<span class="favstar">★</span>` : ""}${stt.open && stt.short ? `<span class="tag">${esc(stt.short)}</span>` : ""}</div>
               <div class="addr">${km(s.dist)} · ${esc(s.place)}, ${esc(s.street)}</div></div>
             <div class="p">${has ? `<b>${price(s[fuel])}</b><div class="d">${d ? ct(d) : "günstigste"}</div>` : `<div class="d">${stt.open ? "kein " + FUELS[fuel] : "geschlossen"}${!stt.open && stt.short ? "<br>" + esc(stt.short) : ""}</div>`}</div>
             ${CHEV}</button>`;
@@ -1055,6 +1192,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     }
     h += `<p class="foot">Schwabensprit${say(" – mir kennet älles, au billig tanka", "")} · Daten: Tankerkönig / MTS-K (CC BY 4.0)</p>`;
     main.innerHTML = h;
+    renderFavs();
     checkHealth();
     if (viewMode === "map" && view.stations.length) mountMap();
     renderAnalysis();
@@ -1208,7 +1346,8 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     $("#detailBody").innerHTML = `
       <button class="back" id="btnBack"><svg width="12" height="20" viewBox="0 0 12 20"><path d="M10 2L2 10l8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Zurück</button>
       <div class="dhead">${badge(s, levelFn()(s), "xl")}
-        <div style="min-width:0"><h1>${esc(s.brand)}</h1><div class="sub">${esc(s.street)}, ${esc(s.place)} · ${km(s.dist)}</div></div></div>
+        <div style="min-width:0"><h1>${esc(s.brand)}</h1><div class="sub">${esc(s.street)}, ${esc(s.place)} · ${km(s.dist)}</div></div>
+        <button class="favbtn" data-favtoggle="${esc(s.id)}" aria-label="${isFav(s.id) ? "Favorit entfernen" : "Als Favorit merken"}">${isFav(s.id) ? "★" : "☆"}</button></div>
       <div class="row">
         <span class="pill ${stt.open ? "ok" : ""}"><i></i>${stt.open ? "Geöffnet" : "Geschlossen"}${stt.text ? " · " + esc(stt.text.replace(/^geöffnet /, "")) : ""}</span>
         ${diffNow != null && all.length > 1 ? pill(diffNow, `${ct(diffNow)} ggü. Ø jetzt`) : ""}
@@ -1809,8 +1948,11 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
   });
 
   document.addEventListener("click", (e) => {
-    const el = e.target.closest("[data-route],[data-detail],[data-fuel],[data-sort],[data-open],[data-report],[data-view],#btnBack,#btnSetup");
+    const el = e.target.closest("[data-route],[data-detail],[data-fuel],[data-sort],[data-open],[data-report],[data-view],[data-fav],[data-favtoggle],#btnFavEdit,#btnBack,#btnSetup");
     if (!el) return;
+    if (el.dataset.fav) return openFav(el.dataset.fav);
+    if (el.dataset.favtoggle) return toggleFav(el.dataset.favtoggle);
+    if (el.id === "btnFavEdit") return openFavDialog();
     if (el.id === "btnBack") return closeDetail();
     if (el.id === "btnSetup") return openSettings();
     if (el.dataset.route) return openRoute(byId(el.dataset.route));
