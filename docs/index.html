@@ -129,7 +129,7 @@ button{font:inherit;border:0;cursor:pointer;color:inherit;background:none}
 .noon.soon{box-shadow:inset 0 0 0 2px var(--acc),var(--shadow)}
 .noon .cd{font-variant-numeric:tabular-nums}
 .valuecard .price1{font-size:21px;font-weight:750;letter-spacing:-.02em;flex:none}
-.two-in{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.two-in{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
 /* Favoriten */
 .favcard{padding:12px 14px 6px}
 .favhead{display:flex;align-items:center;justify-content:space-between;margin:0 0 4px}
@@ -166,7 +166,8 @@ button{font:inherit;border:0;cursor:pointer;color:inherit;background:none}
 .tbitem .p{text-align:right;flex:none;font-variant-numeric:tabular-nums}.tbitem .p b{display:block;font-size:16px}
 .tbtag{display:inline-block;font-size:11.5px;font-weight:650;color:var(--muted);margin-top:2px}
 .tbtag.good{color:var(--acc-ink)}.tbtag.bad{color:var(--hi)}
-.three-in{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.three-in{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+input[type=date],input[type=time]{-webkit-appearance:none;appearance:none;display:block;min-width:0;width:100%;min-height:46px;text-align:left}
 .tbchart{width:100%;height:auto;display:block;margin-top:8px}.tbchart text{fill:var(--muted);font-size:9px}.tbchart .tbval{fill:var(--fg);font-size:8.5px;font-weight:600}.tbbar{fill:var(--lo)}
 .two-in>div,.three-in>div{min-width:0}.two-in input,.three-in input{min-width:0;max-width:100%}
 select{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11px;border:1px solid var(--line);background:var(--card);color:var(--fg);-webkit-appearance:none;appearance:none}
@@ -2060,7 +2061,8 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
   // Belege sehen je Kette anders aus, deshalb mehrere Muster und eine Gegenprobe Menge × Preis = Betrag.
   function parseReceipt(raw) {
     // häufige OCR-Verwechslung: O statt 0 in Zahlen („38,O7“, „Str 2O“)
-    const fix = (s) => s.replace(/(?<=[\d,.])[oO](?=\d)|(?<=\d)[oO](?=[\d,.\s]|$)/g, "0");
+    const fix = (s) => s.replace(/(?<=[\d,.])[oO](?=\d)|(?<=\d)[oO](?=[\d,.\s]|$)/g, "0")
+      .replace(/(\d) ?([,.]) (\d{2,3})(?![\d.,])/g, "$1$2$3").replace(/(\d) ([,.])(\d{2,3})(?![\d.,])/g, "$1$2$3");   // „23, 17“ → „23,17“
     const lines = String(raw || "").split(/\r?\n/).map((l) => fix(l.trim())).filter(Boolean);
     const all = lines.join("\n"), low = all.toLowerCase();
     const n = (s) => parseFloat(String(s).replace(/\s/g, "").replace(",", "."));
@@ -2072,7 +2074,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     const LIT2 = /(?:menge|liter|abgabe)\s*:?\s*(\d{1,3}[,.]\d{2,3})/;
     const PPL = [
       /(\d[,.]\d{2,3})\s*(?:€|eur|euro)?\s*\/\s*(?:l|ltr|liter)\b/,
-      /(?:€|eur)\s*\/\s*(?:l|ltr|liter)\s*:?\s*(\d[,.]\d{2,3})/,
+      /(?:€|eur)\s*\/\s*(?:l|ltr|liter)\b[.:]?\s*(\d[,.]\d{2,3})/,
       /(?:preis|pr\.?)\s*(?:\/|je|pro)\s*(?:l|ltr|liter)\s*:?\s*(\d[,.]\d{2,3})/,
       /(?:\bx|\*|à|@)\s*(\d[,.]\d{3})\b/,
     ];
@@ -2102,12 +2104,13 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     // Gegenprobe Menge × Preis = Betrag. Stehen Shop-Artikel mit auf dem Beleg (Brezel, Kaffee …), ist die
     // Summe größer – dann zählt der Betrag der Kraftstoffzeile, der zu Menge × Preis passt.
     const { liters: L, ppl: P, total: T } = out;
-    const fits = (v) => Math.abs(L * P - v) <= Math.max(0.06, v * 0.01);
+    const fits = (v) => Math.abs(L * P - v) <= 0.03;      // Rundung Menge × Preis: höchstens wenige Cent
     const plausible = (v) => L && v / L >= 0.8 && v / L <= 4;
     if (L && P && T && !fits(T)) {
       const fuelAmt = lines.flatMap(money).find(fits);
-      if (fuelAmt != null) { out.shop = r2(T - fuelAmt); out.total = fuelAmt; }
+      if (fuelAmt != null) { if (T - fuelAmt > 0.05) out.shop = r2(T - fuelAmt); out.total = fuelAmt; }   // Shop-Artikel oder Summe verlesen
       else if (plausible(T)) out.ppl = r3(T / L);                     // Preis je Liter falsch gelesen
+      else if (T / P >= 1 && T / P <= 250) out.liters = r2(T / P);   // Menge falsch gelesen („23,17“ → „3,17“)
     }
     if (L && !P && T && fuelLine >= 0) {                               // ohne Literpreis: Betrag der Kraftstoffzeile bevorzugen
       const amt = [...money(lines[fuelLine]), ...money(lines[fuelLine + 1] || "")].find((v) => plausible(v) && v < T - 0.05);
@@ -2118,7 +2121,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     if (!L && P && T) out.liters = r2(T / P);
 
     // Kraftstoff: zuerst rund um die Mengenzeile, sonst im ganzen Beleg
-    const fuelOf = (t) => /diesel/.test(t) ? "diesel" : /\be\s?10\b|e10/.test(t) ? "e10"
+    const fuelOf = (t) => /diesel|d[il1]esel/.test(t) ? "diesel" : /\be\s?[1il][0o6g]\b|e1[0o]/.test(t) ? "e10"
       : /super|benzin|\be\s?5\b|\b95\b|v-?power|ultimate|excellium|plus/.test(t) ? "e5" : null;
     const near = fuelLine >= 0 ? lines.slice(Math.max(0, fuelLine - 2), fuelLine + 2).join(" ").toLowerCase() : "";
     out.fuel = fuelOf(near) || fuelOf(low);
@@ -2237,20 +2240,23 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     s.src = "ocr/tesseract.min.js"; s.onload = res; s.onerror = () => { tessLoading = null; rej(new Error("Belegleser konnte nicht geladen werden")); };
     document.head.appendChild(s);
   });
+  const canvas = (w, h) => Object.assign(document.createElement("canvas"), { width: Math.max(1, Math.round(w)), height: Math.max(1, Math.round(h)) });
+  const scaledTo = (c, k) => { const o = canvas(c.width * k, c.height * k), x = o.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(c, 0, 0, o.width, o.height); return o; };
   // Foto vorbereiten: richtig drehen (EXIF über <img>), auf Arbeitsgröße bringen
   async function prepImage(file, maxSide) {
     const url = URL.createObjectURL(file);
     try {
       const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("Bild konnte nicht gelesen werden")); i.src = url; });
-      const k = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
-      const c = document.createElement("canvas");
-      c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      return c;
+      // in Halbierungsschritten mit hoher Qualität verkleinern – Safari skaliert große Fotos sonst grob,
+      // die Schrift wird pixelig und die Texterkennung scheitert
+      let c = canvas(img.naturalWidth, img.naturalHeight);
+      c.getContext("2d").drawImage(img, 0, 0);
+      const target = Math.min(1, maxSide / Math.max(c.width, c.height));
+      let k = 1;
+      while (k * 0.5 > target) { c = scaledTo(c, 0.5); k *= 0.5; }
+      return target < k ? scaledTo(c, target / k) : c;
     } finally { URL.revokeObjectURL(url); }
   }
-  const canvas = (w, h) => Object.assign(document.createElement("canvas"), { width: Math.max(1, Math.round(w)), height: Math.max(1, Math.round(h)) });
-  const scaledTo = (c, k) => { const o = canvas(c.width * k, c.height * k), x = o.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(c, 0, 0, o.width, o.height); return o; };
   const grayOf = (c) => {
     const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data, g = new Uint8Array(c.width * c.height);
     for (let i = 0, j = 0; i < d.length; i += 4, j++) g[j] = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
@@ -2327,17 +2333,17 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     return c;
   }
   // Komplette Aufbereitung für die Texterkennung
-  async function prepForOcr(file, rot) {
-    let c = await prepImage(file, 2400);
+  async function prepForOcr(file, rot, plain) {
+    let c = await prepImage(file, 3200);
     if (rot) c = rotated(c, rot, "#000");
     // erst Schräglage am Beleg messen, dann das ganze Foto gerade drehen und den Beleg eng ausschneiden
     let box = paperBox(c);
     const a = skewAngle(box ? cropped(c, box) : c);
     if (Math.abs(a) >= 0.5) { c = rotated(c, -a, "#000"); box = paperBox(c); }
     if (box) c = cropped(c, paperBox(c, -0.015) || box);
-    if (c.width < 1100) c = scaledTo(c, 1100 / c.width);          // Schrift groß genug für Tesseract
-    else if (c.width > 2000) c = scaledTo(c, 2000 / c.width);
-    return flatten(c);
+    if (c.width < 1400) c = scaledTo(c, 1400 / c.width);          // Schrift groß genug für Tesseract
+    else if (c.width > 2200) c = scaledTo(c, 2200 / c.width);
+    return plain ? c : flatten(c);
   }
   const foundOf = (r) => ["fuel", "liters", "ppl", "total", "date", "time"].filter((k) => r[k] != null).length;
   // Lesen; bei schwachem Ergebnis gedreht erneut versuchen (Beleg quer oder kopfüber fotografiert)
@@ -2351,11 +2357,12 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     try {
       await worker.setParameters({ tessedit_pageseg_mode: "4", preserve_interword_spaces: "1" });
       let best = { text: "", found: -1 };
-      for (const rot of [0, 90, 270, 180]) {
-        const { data } = await worker.recognize(await prepForOcr(file, rot));
+      // 1. aufbereitet, 2. ohne Kontrastfilter (Tesseract binarisiert selbst), dann gedreht
+      for (const [rot, plain] of [[0, false], [0, true], [90, false], [270, false], [180, false]]) {
+        const { data } = await worker.recognize(await prepForOcr(file, rot, plain));
         const found = foundOf(parseReceipt(data.text || ""));
         if (found > best.found) best = { text: data.text || "", found };
-        if (best.found >= 4) break;
+        if (best.found >= 6 || (plain && best.found >= 3)) break;   // gedreht nur, wenn aufrecht fast nichts lesbar ist
         step++;
       }
       return best.text;
@@ -2374,22 +2381,32 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     return [...m.values()];
   }
   function matchStation(text, list) {
-    const T = ` ${text.toLowerCase().replace(/[^a-z0-9äöüß]+/g, " ")} `;
-    const words = (s) => String(s || "").toLowerCase().replace(/str(aße|asse|\.)?\b/g, " ").split(/[^a-z0-9äöüß]+/).filter((w) => w.length >= 4);
+    const T = ` ${text.toLowerCase().replace(/[^a-z0-9äöüß]+/g, " ")} `, tokens = new Set(T.trim().split(" "));
+    const STOP = new Set(["unter", "ober", "nieder", "neckar", "fils", "teck", "achalm", "stadt", "straße", "strasse"]);
+    const words = (s) => String(s || "").toLowerCase().replace(/str(aße|asse|\.)?\b/g, " ").split(/[^a-z0-9äöüß]+/).filter((w) => w.length >= 4 && !STOP.has(w));
     const bw = (s) => String(s.brand || "").toLowerCase().replace(/[^a-z0-9äöüß ]/g, "").trim().split(" ")[0];
+    // ein Buchstabe falsch gelesen („MIB“ statt „MTB“) zählt noch als Treffer
+    const near1 = (a, b) => a.length === b.length && [...a].filter((c, i) => c !== b[i]).length === 1;
+    const fuzzy = (w) => w.length >= 3 && [...tokens].some((t) => near1(t, w));
     // Steht eine bekannte Marke auf dem Beleg, passt keine Tankstelle einer anderen Marke
     const brands = new Set(list.map(bw).filter((b) => b && b.length >= 3 && !["freie", "tankstelle", "sb"].includes(b)));
-    const onReceipt = [...brands].find((b) => T.includes(` ${b} `));
+    // nur die erste Zeile: darunter steht oft der Betreiber („Fritz Wahr Energie“), der zufällig wie eine Marke heißen kann
+    const head = new Set(String(text).split(/\n/).map((l) => l.trim()).find(Boolean)?.toLowerCase().split(/[^a-z0-9äöüß]+/) || []);
+    const onReceipt = [...brands].find((b) => head.has(b));
+    const placeHit = (s) => words(s.place).some((w) => tokens.has(w));
+    const perPlace = {};
+    for (const s of list) if (placeHit(s)) perPlace[s.place] = (perPlace[s.place] || 0) + 1;
     let best = null;
     for (const s of list) {
       let sc = 0;
-      const brand = String(s.brand || "").toLowerCase().replace(/[^a-z0-9äöüß ]/g, "").trim();
-      if (brand && brand !== "freie tankstelle" && T.includes(` ${brand.split(" ")[0]} `)) sc += 3;
+      const b = bw(s), generic = !b || ["freie", "tankstelle", "sb"].includes(b);
+      if (!generic && tokens.has(b)) sc += 3;
+      else if (!generic && !onReceipt && fuzzy(b)) sc += 2;
       else if (onReceipt) sc -= 4;
-      const plz = s.plz && T.includes(` ${s.plz} `), place = words(s.place).some((w) => T.includes(` ${w} `));
+      const plz = s.plz && T.includes(` ${s.plz}`), place = placeHit(s);
       if (plz) sc += 3;
       if (words(s.street).some((w) => T.includes(w))) sc += 3;
-      if (place) sc += 2;
+      if (place) sc += perPlace[s.place] === 1 ? 4 : 2;   // einzige Tankstelle in diesem Ort → fast eindeutig
       if (!plz && !place) sc -= 2;                 // ohne passenden Ort keine sichere Zuordnung
       const hn = String(s.street || "").match(/\d+/)?.[0];
       if (hn && T.includes(` ${hn} `)) sc += 1;
