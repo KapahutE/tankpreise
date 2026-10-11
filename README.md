@@ -59,9 +59,9 @@ Schlägt ein Lauf fehl, etwa wegen eines falschen API-Keys, schickt GitHub dir e
 | `bases.json` | Feste Orte mit Mittelpunkt und Radius (max. 25 km) |
 | `data/stations.json` | Stammdaten der Tankstellen |
 | `data/opening_times.json` | Öffnungszeiten (werden wöchentlich und für neue Tankstellen abgerufen) |
-| `docs/index.html` | die iPhone-Web-App |
-| `docs/reports/<Base>/` | Wochenreports je Base (HTML + Markdown) |
-| `docs/data/bases.json`, `docs/data/<Base>/*.json` | aufbereitete Daten für die App |
+| App | eigenes Repository [Schwabensprit-app](https://github.com/KapahutE/Schwabensprit-app) – einzige Quelle des App-Codes |
+| `docs/reports/<Base>/` (Zweig `app-daten`) | Wochenreports je Base (HTML + Markdown) |
+| `docs/data/bases.json`, `docs/data/<Base>/*.json` (Zweig `app-daten`) | aufbereitete Daten für die App |
 
 ## Lokal auf einem PC/Raspberry Pi (Alternative ohne GitHub)
 
@@ -93,3 +93,11 @@ Bei jedem Abruf lernt ein kleines Modell aus den Daten der letzten 21 Tage (nur 
   für 1–12 Stunden voraus. Angezeigt wird die Prognose nur, wenn sie die Annahme „Preis bleibt gleich“ um mindestens 10 % schlägt;
   der gemessene Fehler erscheint in der App als Band (± ct).
 - Ergebnis je Base in `docs/data/<Base>/forecast.json`. Frühestens nach 3 Tagen Daten verfügbar.
+
+## Speicherplatz
+
+Auf `main` liegen nur Programm und Rohdaten (`data/`). Die aufbereiteten App-Daten (`docs/data`, `docs/reports`) werden bei jedem
+Abruf als **einzelner Commit ohne Verlauf** auf den Zweig `app-daten` geschrieben (Force-Push). Der Ablauf holt sich zu Beginn den
+letzten Stand von dort, damit fortlaufende Dateien (Monatsverläufe, Wochenreports) erhalten bleiben. So wächst das Repository nur
+noch um die eigentlichen Preisänderungen.
+
