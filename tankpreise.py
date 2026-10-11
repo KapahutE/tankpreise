@@ -19,6 +19,7 @@ einem Git-Repository (GitHub Actions) sauber versioniert werden können.
 Nur Python-Standardbibliothek, keine zusätzlichen Pakete nötig.
 """
 
+from decimal import Decimal, ROUND_HALF_UP
 import argparse
 from array import array
 import bisect
@@ -599,9 +600,11 @@ def svg_updown(up, down, width=720, height=200):
 # --------------------------------------------------------------------------- Report-Ausgabe
 
 def eur(v, sign=False):
+    # Anzeige in den Reports: immer auf zwei Nachkommastellen gerundet (Rohdaten bleiben genau)
     if v is None:
         return "–"
-    s = f"{v:+.3f}" if sign else f"{v:.3f}"
+    d = Decimal(str(round(v, 6))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)   # 2,035 → 2,04
+    s = f"{d:+.2f}" if sign else f"{d:.2f}"
     return s.replace(".", ",") + " €"
 
 
@@ -626,7 +629,7 @@ def svg_line(series, width=720, height=220):
         v = lo + (hi - lo) * i / 4
         y = Y(v)
         grid.append(f'<line x1="{pad_l}" x2="{width - pad_r}" y1="{y:.1f}" y2="{y:.1f}" class="grid"/>'
-                    f'<text x="{pad_l - 6}" y="{y + 4:.1f}" text-anchor="end">{v:.3f}</text>')
+                    f'<text x="{pad_l - 6}" y="{y + 4:.1f}" text-anchor="end">{v:.2f}</text>')
     day = series[0][0].replace(hour=0, minute=0, second=0)
     while day <= series[-1][0]:
         if day >= series[0][0]:
