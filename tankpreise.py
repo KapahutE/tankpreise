@@ -629,7 +629,7 @@ def svg_line(series, width=720, height=220):
         v = lo + (hi - lo) * i / 4
         y = Y(v)
         grid.append(f'<line x1="{pad_l}" x2="{width - pad_r}" y1="{y:.1f}" y2="{y:.1f}" class="grid"/>'
-                    f'<text x="{pad_l - 6}" y="{y + 4:.1f}" text-anchor="end">{v:.2f}</text>')
+                    f'<text x="{pad_l - 6}" y="{y + 4:.1f}" text-anchor="end">{eur(v)}</text>')
     day = series[0][0].replace(hour=0, minute=0, second=0)
     while day <= series[-1][0]:
         if day >= series[0][0]:
