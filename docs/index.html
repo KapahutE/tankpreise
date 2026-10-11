@@ -149,6 +149,40 @@ button{font:inherit;border:0;cursor:pointer;color:inherit;background:none}
 .favedit .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
 .favedit button{width:36px;height:36px;border-radius:10px;background:var(--seg);font-size:15px;flex:none}
 .favedit button:disabled{opacity:.3}
+/* Tankbuch */
+#tankbuch{position:fixed;inset:0;background:var(--bg);z-index:30;overflow-y:auto;-webkit-overflow-scrolling:touch;transform:translateX(100%);transition:transform .28s ease;visibility:hidden}
+#tankbuch.open{transform:none;visibility:visible}
+#tankbuch .wrap{max-width:640px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 8px) 16px calc(env(safe-area-inset-bottom) + 28px)}
+.tbh{font-size:30px;margin:6px 0 0;letter-spacing:-.025em}
+.tbrow{display:flex;align-items:center;gap:12px;width:100%;background:var(--card);border-radius:16px;padding:10px 14px;margin-bottom:12px;box-shadow:var(--shadow);text-align:left;color:inherit}
+.tbrow .ic{font-size:22px;width:32px;text-align:center;flex:none}
+.tbrow .t{flex:1;min-width:0}.tbrow .t b{display:block;font-size:15px}
+.tbrow .t span{display:block;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbitem{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--line);width:100%;text-align:left;color:inherit}
+.tbitem:last-child{border-bottom:0}
+.tbitem .d{width:48px;flex:none;font-weight:700;font-size:15px;font-variant-numeric:tabular-nums}.tbitem .d span{display:block;font-weight:500;font-size:12px;color:var(--muted)}
+.tbitem .info{flex:1;min-width:0}.tbitem .name{font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbitem .addr{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbitem .p{text-align:right;flex:none;font-variant-numeric:tabular-nums}.tbitem .p b{display:block;font-size:16px}
+.tbtag{display:inline-block;font-size:11.5px;font-weight:650;color:var(--muted);margin-top:2px}
+.tbtag.good{color:var(--acc-ink)}.tbtag.bad{color:var(--hi)}
+.three-in{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.two-in>div,.three-in>div{min-width:0}.two-in input,.three-in input{min-width:0;max-width:100%}
+select{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11px;border:1px solid var(--line);background:var(--card);color:var(--fg);-webkit-appearance:none;appearance:none}
+#tbImg{display:block;max-width:100%;max-height:180px;margin:0 auto 6px;border-radius:10px;box-shadow:var(--shadow)}
+#tbOcr{font-size:13px;color:var(--muted);min-height:18px;margin:4px 0 0;line-height:1.45}
+.spin-dot{display:inline-block;width:10px;height:10px;border-radius:50%;border:2px solid var(--acc);border-right-color:transparent;animation:spin 1s linear infinite;vertical-align:-1px}
+.congrats{position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:rgba(0,0,0,.45);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);padding:24px}
+.congrats[hidden]{display:none}
+.congrats .box{position:relative;background:var(--card);border-radius:22px;padding:26px 22px 22px;max-width:380px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.35);animation:pop .35s cubic-bezier(.2,1.4,.4,1)}
+.congrats .big{font-size:56px;line-height:1}
+.congrats h3{margin:10px 0 8px;font-size:22px;letter-spacing:-.02em}
+.congrats p{margin:0;color:var(--muted);font-size:15px;line-height:1.5}.congrats p b{color:var(--fg)}
+#cgConfetti{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+#cgConfetti i{position:absolute;top:-40px;font-style:normal;font-size:24px;animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(110vh) rotate(540deg)}}
+@keyframes pop{from{transform:scale(.7);opacity:0}to{transform:none;opacity:1}}
+
 
 /* Liste */
 .chips{display:flex;gap:8px;margin:0 0 10px;flex-wrap:wrap}
@@ -376,6 +410,44 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
 <main id="main"><div class="skel" style="height:268px;margin-top:6px"></div><div class="skel" style="height:132px"></div><div class="skel" style="height:320px"></div></main>
 
 <div id="detail" aria-hidden="true"><div class="wrap" id="detailBody"></div></div>
+<div id="tankbuch" aria-hidden="true"><div class="wrap" id="tbBody"></div></div>
+<input type="file" id="tbFile" accept="image/*" hidden>
+<input type="file" id="tbImport" accept="application/json,.json" hidden>
+<dialog id="dlgTb">
+  <form method="dialog" class="inner" onsubmit="return false">
+    <h3 id="tbTitle">Tankung erfassen</h3>
+    <img id="tbImg" alt="Tankbeleg" hidden>
+    <div id="tbOcr"></div>
+    <div class="two-in">
+      <div><label for="tbDate">Datum</label><input id="tbDate" type="date"></div>
+      <div><label for="tbTime">Uhrzeit</label><input id="tbTime" type="time"></div>
+    </div>
+    <label for="tbFuel">Kraftstoff</label>
+    <select id="tbFuel"><option value="e5">Super E5</option><option value="e10">Super E10</option><option value="diesel">Diesel</option></select>
+    <label class="check" style="margin-top:8px"><input id="tbPremium" type="checkbox"> <span>Premium-Sorte <span class="small">(z. B. V-Power, Ultimate – verglichen wird mit der Grundsorte)</span></span></label>
+    <div class="three-in">
+      <div><label for="tbL">Liter</label><input id="tbL" type="text" inputmode="decimal" placeholder="42,15"></div>
+      <div><label for="tbP">€ je Liter</label><input id="tbP" type="text" inputmode="decimal" placeholder="1,899"></div>
+      <div><label for="tbT">Betrag €</label><input id="tbT" type="text" inputmode="decimal" placeholder="80,04"></div>
+    </div>
+    <label for="tbSt">Tankstelle</label>
+    <select id="tbSt"><option value="">– unbekannt / andere –</option></select>
+    <div class="two-in">
+      <div><label for="tbOdo">Kilometerstand <span class="small">(optional)</span></label><input id="tbOdo" type="text" inputmode="numeric" placeholder="z. B. 84213"></div>
+      <div><label>&nbsp;</label><label class="check" style="margin:12px 0 0"><input id="tbFull" type="checkbox" checked> <span>vollgetankt</span></label></div>
+    </div>
+    <label for="tbNote">Notiz <span class="small">(optional)</span></label>
+    <input id="tbNote" type="text" placeholder="z. B. Urlaubsfahrt">
+    <div class="actions">
+      <button class="btn secondary" id="btnTbCancel" type="button">Abbrechen</button>
+      <button class="btn" id="btnTbSave" type="button">Speichern</button>
+    </div>
+    <div class="actions"><button class="btn secondary block" id="btnTbDel" type="button" hidden>Löschen</button></div>
+  </form>
+</dialog>
+<div id="congrats" class="congrats" hidden><div id="cgConfetti"></div><div class="box"><div class="big">🏆</div><h3 id="cgTitle"></h3><p id="cgText"></p>
+  <div class="actions"><button class="btn block" type="button">Merci!</button></div></div></div>
+
 <div id="report"><div class="bar"><button class="back" id="btnRepBack"><svg width="12" height="20" viewBox="0 0 12 20"><path d="M10 2L2 10l8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Zurück</button></div><iframe id="repFrame" title="Wochenreport"></iframe></div>
 
 <dialog id="dlgFav">
@@ -426,6 +498,8 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     <input id="inTokExp" type="date">
     <label for="inTk">Tankerkönig-Schlüssel <span class="small">(optional, für Live-Preise außerhalb der Bases)</span></label>
     <input id="inTk" type="password" placeholder="xxxxxxxx-xxxx-…" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label for="inHome">Meine Homebase <span class="small">(Vergleich im Tankbuch)</span></label>
+    <select id="inHome"></select>
     <div class="two-in">
       <div><label for="inTank">Tankmenge (Liter)</label><input id="inTank" type="text" inputmode="decimal" placeholder="50"></div>
       <div><label for="inCons">Verbrauch (l/100 km)</label><input id="inCons" type="text" inputmode="decimal" placeholder="7"></div>
@@ -1085,7 +1159,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
         : `<div class="card empty"><div class="bigic">⚠️</div><b>Daten konnten nicht geladen werden</b><p>${esc(view.error.message)} – zum Neuladen nach unten ziehen.</p></div>`;
       return;
     }
-    let h = `<div id="favs"></div>`;
+    let h = `<div id="favs"></div><div id="tbentry"></div>`;
     h += `<div id="health">${healthHtml}</div>`;
     const exp = store.get("tokenExp", ""), left = exp ? Math.ceil((new Date(exp + "T23:59:59") - Date.now()) / 864e5) : null;
     if (token() && left != null && left <= 14)
@@ -1193,6 +1267,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     h += `<p class="foot">Schwabensprit${say(" – mir kennet älles, au billig tanka", "")} · Daten: Tankerkönig / MTS-K (CC BY 4.0)</p>`;
     main.innerHTML = h;
     renderFavs();
+    renderTbEntry();
     checkHealth();
     if (viewMode === "map" && view.stations.length) mountMap();
     renderAnalysis();
@@ -1899,6 +1974,8 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     $("#inTk").value = store.get("tk", "");
     $("#inDialect").checked = SW();
     $("#inTokExp").value = store.get("tokenExp", "");
+    $("#inHome").innerHTML = bases.map((b) => `<option value="${esc(b.id)}">${esc(b.name)} · ${esc(b.place)}</option>`).join("");
+    if (homeBase()) $("#inHome").value = homeBase().id;
     $("#inTank").value = fmtNum(TANK(), 0);
     $("#inCons").value = fmtNum(CONS(), 1);
     $("#testOut").innerHTML = "";
@@ -1910,6 +1987,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     store.set("tk", $("#inTk").value.trim());
     store.set("dialect", $("#inDialect").checked ? "1" : "0");
     store.set("tokenExp", $("#inTokExp").value);
+    if ($("#inHome").value) store.set("homeBase", $("#inHome").value);
     store.set("tank", $("#inTank").value || "50");
     store.set("cons", $("#inCons").value || "7");
     dataMode = null; bases = [];
@@ -1973,9 +2051,475 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     sx = null;
   }, { passive: true });
 
+  // ---- Tankbeleg auswerten: Kraftstoff, Menge, Preis/Liter, Betrag, Datum, Uhrzeit aus dem OCR-Text.
+  // Belege sehen je Kette anders aus, deshalb mehrere Muster und eine Gegenprobe Menge × Preis = Betrag.
+  function parseReceipt(raw) {
+    // häufige OCR-Verwechslung: O statt 0 in Zahlen („38,O7“, „Str 2O“)
+    const fix = (s) => s.replace(/(?<=[\d,.])[oO](?=\d)|(?<=\d)[oO](?=[\d,.\s]|$)/g, "0");
+    const lines = String(raw || "").split(/\r?\n/).map((l) => fix(l.trim())).filter(Boolean);
+    const all = lines.join("\n"), low = all.toLowerCase();
+    const n = (s) => parseFloat(String(s).replace(/\s/g, "").replace(",", "."));
+    const r2 = (v) => Math.round(v * 100) / 100, r3 = (v) => Math.round(v * 1000) / 1000;
+    const out = { fuel: null, premium: false, liters: null, ppl: null, total: null, date: null, time: null };
+
+    // Menge und Preis je Liter, oft in einer Zeile: „42,15 l x 1,899 EUR/l“ oder „42,15 L * 1,899“
+    const LIT = /(\d{1,3}[,.]\d{2,3})\s*(?:l|ltr|lt|liter)\b/;
+    const LIT2 = /(?:menge|liter|abgabe)\s*:?\s*(\d{1,3}[,.]\d{2,3})/;
+    const PPL = [
+      /(\d[,.]\d{2,3})\s*(?:€|eur|euro)?\s*\/\s*(?:l|ltr|liter)\b/,
+      /(?:€|eur)\s*\/\s*(?:l|ltr|liter)\s*:?\s*(\d[,.]\d{2,3})/,
+      /(?:preis|pr\.?)\s*(?:\/|je|pro)\s*(?:l|ltr|liter)\s*:?\s*(\d[,.]\d{2,3})/,
+      /(?:\bx|\*|à|@)\s*(\d[,.]\d{3})\b/,
+    ];
+    let fuelLine = -1;
+    lines.forEach((l, i) => {
+      const L = l.toLowerCase();
+      const m = L.match(LIT) || L.match(LIT2);
+      if (m && out.liters == null && n(m[1]) >= 1 && n(m[1]) <= 250) { out.liters = n(m[1]); fuelLine = i; }
+      const p = PPL.map((re) => L.match(re)).find(Boolean);
+      if (p && out.ppl == null && n(p[1]) >= 0.8 && n(p[1]) <= 4) { out.ppl = n(p[1]); if (fuelLine < 0) fuelLine = i; }
+    });
+
+    // Betrag: zuerst Summe/Gesamt/Zu zahlen, dann Zahlart-Zeilen (nie MwSt, Rückgeld …), sonst größter Betrag
+    const money = (l) => [...l.matchAll(/(?<![\d,.])(\d{1,4}[,.]\d{2})(?![\d,.]|\s*(?:l|ltr|liter)\b|\s*(?:€|eur)?\s*\/)/gi)].map((m) => n(m[1]));
+    const skip = /(mwst|ust|netto|steuer|rückgeld|rueckgeld|gegeben)/i;
+    const pick = (re) => {
+      const c = lines.filter((l) => re.test(l) && !skip.test(l)).flatMap(money).filter((v) => v >= 1 && v <= 600);
+      return c.length ? Math.max(...c) : null;
+    };
+    out.total = pick(/(summe|gesamt|zu zahlen|endbetrag|total|betrag)/i)
+      ?? pick(/(bezahlt|girocard|ec-?karte|kreditkarte|visa|mastercard|maestro|\bbar\b)/i);
+    if (out.total == null) {
+      const any = lines.filter((l) => !skip.test(l)).flatMap(money).filter((v) => v >= 5 && v <= 600);
+      if (any.length) out.total = Math.max(...any);
+    }
+
+    // Gegenprobe Menge × Preis = Betrag; fehlende Größe ergänzen
+    const { liters: L, ppl: P, total: T } = out;
+    if (L && P && T && Math.abs(L * P - T) > Math.max(0.06, T * 0.01) && T / L >= 0.8 && T / L <= 4) out.ppl = r3(T / L);
+    if (L && P && !T) out.total = r2(L * P);
+    if (L && T && !P && T / L >= 0.8 && T / L <= 4) out.ppl = r3(T / L);
+    if (!L && P && T) out.liters = r2(T / P);
+
+    // Kraftstoff: zuerst rund um die Mengenzeile, sonst im ganzen Beleg
+    const fuelOf = (t) => /diesel/.test(t) ? "diesel" : /\be\s?10\b|e10/.test(t) ? "e10"
+      : /super|benzin|\be\s?5\b|\b95\b|v-?power|ultimate|excellium|plus/.test(t) ? "e5" : null;
+    const near = fuelLine >= 0 ? lines.slice(Math.max(0, fuelLine - 2), fuelLine + 2).join(" ").toLowerCase() : "";
+    out.fuel = fuelOf(near) || fuelOf(low);
+    out.premium = /v-?power|ultimate|excellium|super\s*plus|\b10[02]\b|max\s*plus/.test(near || low);
+
+    // Datum (TT.MM.JJ[JJ]) und Uhrzeit (HH:MM[:SS])
+    const now = new Date();
+    for (const m of all.matchAll(/(?<![\d,.])(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4}|\d{2})(?![\d,])/g)) {
+      const y = m[3].length === 2 ? 2000 + +m[3] : +m[3], mo = +m[2], d = +m[1], dt = new Date(y, mo - 1, d);
+      if (y >= 2020 && dt.getMonth() === mo - 1 && dt.getDate() === d && dt <= new Date(now.getTime() + 864e5)) {
+        out.date = `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`; break;
+      }
+    }
+    const tm = all.match(/(?<![\d,.:])([01]?\d|2[0-3])\s?:\s?([0-5]\d)(?::[0-5]\d)?(?![\d,])/)
+      || all.match(/(?:uhrzeit|zeit)\s*:?\s*([01]?\d|2[0-3])[.:]([0-5]\d)/i);
+    if (tm) out.time = `${String(+tm[1]).padStart(2, "0")}:${tm[2]}`;
+    return out;
+  }
+
+  // =========================================================================== Tankbuch
+  // Tankbelege fotografieren, mit Tesseract.js (Open Source, läuft komplett auf dem Gerät) auslesen,
+  // prüfen, speichern und mit dem günstigsten Preis im Umkreis der Homebase zum Tankzeitpunkt vergleichen.
+  // Alles bleibt auf dem Gerät (IndexedDB) – Sicherung/Export als Datei.
+  const tbDB = (() => {
+    let p;
+    const open = () => p ||= new Promise((res, rej) => {
+      const r = indexedDB.open("schwabensprit", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("tankbuch", { keyPath: "id" });
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => { p = null; rej(r.error); };
+    });
+    const tx = async (mode, fn) => {
+      const db = await open();
+      return new Promise((res, rej) => {
+        const t = db.transaction("tankbuch", mode), req = fn(t.objectStore("tankbuch"));
+        t.oncomplete = () => res(req?.result);
+        t.onerror = () => rej(t.error);
+      });
+    };
+    return { all: () => tx("readonly", (s) => s.getAll()), put: (e) => tx("readwrite", (s) => s.put(e)), del: (id) => tx("readwrite", (s) => s.delete(id)) };
+  })();
+  let tbEntries = [], tbLoaded = false;
+  async function tbLoad() {
+    try { tbEntries = (await tbDB.all()) || []; } catch { tbEntries = []; }
+    tbEntries.sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
+    tbLoaded = true;
+  }
+  try { navigator.storage?.persist?.(); } catch {}
+
+  const homeBase = () => {
+    const id = store.get("homeBase", "");
+    return bases.find((b) => b.id === id) || bases.find((b) => /^homebase/i.test(b.name)) || bases[0] || null;
+  };
+  const dDE = (iso) => iso ? iso.split("-").reverse().join(".") : "";
+  const num2 = (v) => { const x = parseFloat(String(v ?? "").replace(/\s/g, "").replace(",", ".")); return Number.isFinite(x) ? x : null; };
+  const fmtL = (v) => v == null ? "–" : fmtNum(v, 2) + " l";
+  const ctl = (v) => `${v > 0.0005 ? "+" : v < -0.0005 ? "−" : "±"}${fmtNum(Math.abs(v) * 100, 1)} ct/l`;
+
+  // ---- Vergleich: günstigster und mittlerer Preis im Umkreis der Homebase zur Tankzeit (min-JJJJ-MM.json)
+  const minCache = {};
+  async function compareEntry(e) {
+    const hb = homeBase();
+    if (!hb || !e.date || !e.fuel || !e.ppl) return null;
+    const ym = e.date.slice(0, 7), key = `${hb.id}/${ym}`;
+    if (!(key in minCache)) minCache[key] = await fetchData(`data/${hb.id}/min-${ym}.json`).catch(() => null);
+    const mf = minCache[key];
+    if (!mf?.[e.fuel]) return { base: hb.id, none: true };
+    const [y, m, d] = e.date.split("-").map(Number), [hh, mi] = (e.time || "12:00").split(":").map(Number);
+    const [sy, sm] = mf.start.slice(0, 7).split("-").map(Number);
+    const i0 = Math.floor((Date.UTC(y, m - 1, d, hh, mi) - Date.UTC(sy, sm - 1, 1)) / (mf.step * 60000));
+    const arr = mf[e.fuel];
+    const i = [i0, i0 - 1, i0 + 1, i0 - 2].find((k) => arr.min[k] != null);   // kleine Lücken überbrücken
+    if (i == null) return { base: hb.id, none: true };
+    return { base: hb.id, min: arr.min[i] / 1000, avg: arr.avg[i] / 1000, cheapest: mf.names?.[mf.ids[arr.at[i]]] || "" };
+  }
+  // Bewertung eines Eintrags: Bestpreis getroffen, günstiger als alles im Umkreis, oder Abstand
+  const verdictOf = (e) => {
+    const c = e.cmp;
+    if (!c || c.none || c.min == null) return null;
+    const diff = e.ppl - c.min;
+    return { diff, best: diff <= 0.0005, beat: diff < -0.0005, vsAvg: (c.avg - e.ppl) * e.liters };
+  };
+
+  // ---- Belegleser (Tesseract.js, Dateien liegen im App-Repository unter ocr/)
+  const absUrl = (p) => new URL(p, location.href).href;
+  let tessLoading = null;
+  const loadTess = () => tessLoading ||= new Promise((res, rej) => {
+    if (window.Tesseract) return res();
+    const s = document.createElement("script");
+    s.src = "ocr/tesseract.min.js"; s.onload = res; s.onerror = () => { tessLoading = null; rej(new Error("Belegleser konnte nicht geladen werden")); };
+    document.head.appendChild(s);
+  });
+  // Foto vorbereiten: richtig drehen (EXIF), auf gut lesbare Größe bringen, Graustufen + Kontrast
+  async function prepImage(file, maxSide) {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("Bild konnte nicht gelesen werden")); i.src = url; });
+      const k = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      return c;
+    } finally { URL.revokeObjectURL(url); }
+  }
+  function enhance(c) {
+    const ctx = c.getContext("2d"), im = ctx.getImageData(0, 0, c.width, c.height), d = im.data, hist = new Uint32Array(256);
+    for (let i = 0; i < d.length; i += 4) { const g = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000 | 0; d[i] = g; hist[g]++; }
+    const tot = d.length / 4; let lo = 0, hi = 255, acc = 0;
+    while (lo < 255 && (acc += hist[lo]) < tot * 0.02) lo++;
+    acc = 0; while (hi > 0 && (acc += hist[hi]) < tot * 0.02) hi--;
+    const span = Math.max(1, hi - lo);
+    for (let i = 0; i < d.length; i += 4) { const v = Math.max(0, Math.min(255, (d[i] - lo) * 255 / span)); d[i] = d[i + 1] = d[i + 2] = v; }
+    ctx.putImageData(im, 0, 0);
+    return c;
+  }
+  async function readReceipt(file, onProgress) {
+    await loadTess();
+    const worker = await Tesseract.createWorker("deu", 1, {
+      workerPath: absUrl("ocr/worker.min.js"), corePath: absUrl("ocr/"), langPath: absUrl("ocr/"), gzip: true,
+      logger: (m) => m.status === "recognizing text" && onProgress?.(m.progress),
+    });
+    try {
+      await worker.setParameters({ tessedit_pageseg_mode: "4", preserve_interword_spaces: "1" });
+      const { data } = await worker.recognize(enhance(await prepImage(file, 2200)));
+      return data.text || "";
+    } finally { worker.terminate(); }
+  }
+  async function thumbOf(file) {
+    const c = await prepImage(file, 1000);
+    return new Promise((res) => c.toBlob((b) => res(b), "image/jpeg", 0.6));
+  }
+
+  // ---- Tankstelle zum Beleg finden (Marke, PLZ, Straße, Ort)
+  async function allStations() {
+    await Promise.all(bases.filter((b) => !baseCache[b.id]).map((b) => loadBaseData(b).catch(() => null)));
+    const m = new Map();
+    for (const b of bases) for (const s of baseCache[b.id]?.latest?.stations || []) m.set(s.id, s);
+    return [...m.values()];
+  }
+  function matchStation(text, list) {
+    const T = ` ${text.toLowerCase().replace(/[^a-z0-9äöüß]+/g, " ")} `;
+    const words = (s) => String(s || "").toLowerCase().replace(/str(aße|asse|\.)?\b/g, " ").split(/[^a-z0-9äöüß]+/).filter((w) => w.length >= 4);
+    const bw = (s) => String(s.brand || "").toLowerCase().replace(/[^a-z0-9äöüß ]/g, "").trim().split(" ")[0];
+    // Steht eine bekannte Marke auf dem Beleg, passt keine Tankstelle einer anderen Marke
+    const brands = new Set(list.map(bw).filter((b) => b && b.length >= 3 && !["freie", "tankstelle", "sb"].includes(b)));
+    const onReceipt = [...brands].find((b) => T.includes(` ${b} `));
+    let best = null;
+    for (const s of list) {
+      let sc = 0;
+      const brand = String(s.brand || "").toLowerCase().replace(/[^a-z0-9äöüß ]/g, "").trim();
+      if (brand && brand !== "freie tankstelle" && T.includes(` ${brand.split(" ")[0]} `)) sc += 3;
+      else if (onReceipt) sc -= 4;
+      const plz = s.plz && T.includes(` ${s.plz} `), place = words(s.place).some((w) => T.includes(` ${w} `));
+      if (plz) sc += 3;
+      if (words(s.street).some((w) => T.includes(w))) sc += 3;
+      if (place) sc += 2;
+      if (!plz && !place) sc -= 2;                 // ohne passenden Ort keine sichere Zuordnung
+      const hn = String(s.street || "").match(/\d+/)?.[0];
+      if (hn && T.includes(` ${hn} `)) sc += 1;
+      if (sc > (best?.sc ?? 0)) best = { s, sc };
+    }
+    return best && best.sc >= 5 ? best.s : null;
+  }
+
+  // ---- Tankbuch: Einstieg auf der Startseite (eine Zeile) und eigene Ansicht
+  function renderTbEntry() {
+    const el = $("#tbentry");
+    if (!el) return;
+    if (!tbLoaded) { tbLoad().then(renderTbEntry); return; }
+    const last = tbEntries[0], v = last && verdictOf(last);
+    const sub = last
+      ? `${dDE(last.date)} · ${fmtL(last.liters)} · ${eur(last.ppl)}/l${v ? v.best ? " · 🏆 Bestpreis" : ` · ${ctl(v.diff)} zum Bestpreis` : ""}`
+      : say("Beleg fotografiera – ond gugga, wie billig du tankt hosch", "Beleg fotografieren und sehen, wie günstig du getankt hast");
+    el.innerHTML = `<button class="tbrow" id="btnTbOpen"><span class="ic">📒</span><span class="t"><b>Tankbuch</b><span>${esc(sub)}</span></span>${CHEV}</button>`;
+  }
+  let tbOpenState = false;
+  async function openTankbuch() {
+    if (!tbLoaded) await tbLoad();
+    tbOpenState = true;
+    if (window.history.state?.tb !== 1) try { window.history.pushState({ tb: 1 }, ""); } catch {}
+    $("#tankbuch").classList.add("open"); $("#tankbuch").setAttribute("aria-hidden", "false");
+    document.body.classList.add("lock");
+    renderTankbuch();
+  }
+  function closeTankbuch(fromPop) {
+    if (!tbOpenState) return;
+    tbOpenState = false;
+    $("#tankbuch").classList.remove("open"); $("#tankbuch").setAttribute("aria-hidden", "true");
+    document.body.classList.remove("lock");
+    if (!fromPop) try { window.history.back(); } catch {}
+    renderTbEntry();
+  }
+  window.addEventListener("popstate", () => closeTankbuch(true));
+
+  function tbStats(list) {
+    const s = { n: list.length, liters: 0, cost: 0, saved: 0, cmpN: 0, best: 0 };
+    for (const e of list) {
+      s.liters += e.liters || 0; s.cost += e.total || 0;
+      const v = verdictOf(e);
+      if (v) { s.cmpN++; s.saved += v.vsAvg; if (v.best) s.best++; }
+    }
+    s.ppl = s.liters ? s.cost / s.liters : null;
+    // Verbrauch aus Kilometerständen: Volltankung zu Volltankung
+    const odo = list.filter((e) => e.odo).sort((a, b) => a.odo - b.odo);
+    let km = 0, l = 0, eu = 0;
+    for (let i = 1; i < odo.length; i++) {
+      const d = odo[i].odo - odo[i - 1].odo;
+      if (d > 0 && d < 3000 && odo[i].full !== false) { km += d; l += odo[i].liters || 0; eu += odo[i].total || 0; }
+    }
+    if (km >= 50) { s.cons = l / km * 100; s.per100 = eu / km * 100; s.km = km; }
+    return s;
+  }
+  function renderTankbuch() {
+    const year = String(new Date().getFullYear()), list = tbEntries.filter((e) => e.date?.startsWith(year)), st = tbStats(list);
+    const hb = homeBase();
+    const months = {};
+    for (const e of tbEntries) { const k = e.date.slice(0, 7); (months[k] ||= []).push(e); }
+    const rows = tbEntries.map((e) => {
+      const v = verdictOf(e);
+      const tag = v ? v.best ? `<span class="tbtag good">🏆 ${v.beat ? say("billiger als älles", "günstiger als alle") : "Bestpreis"}</span>` : `<span class="tbtag ${v.diff > 0.02 ? "bad" : ""}">${ctl(v.diff)}</span>` : "";
+      return `<button class="tbitem" data-tbedit="${esc(e.id)}"><div class="d">${esc(dDE(e.date).slice(0, 6))}<span>${esc(e.time || "")}</span></div>
+        <div class="info"><div class="name"><span>${esc(e.station?.label || "Tankstelle")}</span></div>
+        <div class="addr">${FUELS[e.fuel] || ""}${e.premium ? " (Premium)" : ""} · ${fmtL(e.liters)} · ${eur(e.ppl)}/l</div></div>
+        <div class="p"><b>${eur2(e.total || 0)}</b>${tag}</div></button>`;
+    }).join("");
+    $("#tbBody").innerHTML = `
+      <button class="back" id="btnTbBack"><svg width="12" height="20" viewBox="0 0 12 20"><path d="M10 2L2 10l8 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Zurück</button>
+      <h1 class="tbh">📒 Tankbuch</h1>
+      <p class="small" style="margin:2px 0 14px">Vergleich mit dem günstigsten Preis im Umkreis von <b>${esc(hb?.name || "–")}</b> zur Tankzeit · änderbar unter ⚙</p>
+      <div class="row two" style="margin:0 0 6px">
+        <button class="btn" id="btnTbScan">📷 ${say("Beleg scanna", "Beleg scannen")}</button>
+        <button class="btn secondary" id="btnTbManual">✍️ Ohne Beleg</button>
+      </div>
+      ${st.n ? `<div class="sec"><h2>${year}</h2><span class="sub">${st.n} ${st.n === 1 ? "Tankung" : "Tankungen"}</span></div>
+      <div class="stats">
+        <div class="card stat"><span class="eyebrow">Kosten</span><span class="v">${eur2(st.cost)}</span><span class="sub">${fmtNum(st.liters, 1)} l · Ø ${st.ppl ? eur(st.ppl) : "–"}/l</span></div>
+        <div class="card stat"><span class="eyebrow">${say("Gspart", "Gespart")}</span><span class="v">${st.cmpN ? eur2(st.saved) : "–"}</span><span class="sub">ggü. Ø im Umkreis der Homebase</span></div>
+        <div class="card stat"><span class="eyebrow">Bestpreis</span><span class="v">${st.cmpN ? `${st.best} von ${st.cmpN}` : "–"}</span><span class="sub">Tankungen zum günstigsten Preis</span></div>
+        <div class="card stat"><span class="eyebrow">Verbrauch</span><span class="v">${st.cons ? fmtNum(st.cons, 1) + " l" : "–"}</span><span class="sub">${st.cons ? `je 100 km · ${eur2(st.per100)}/100 km` : "Kilometerstand eintragen"}</span></div>
+      </div>
+      ${tbl(["Monat", "Liter", "Kosten", "Ø €/l"], Object.keys(months).sort().reverse().map((k) => {
+        const s = tbStats(months[k]); return [`${k.slice(5)}/${k.slice(0, 4)}`, fmtNum(s.liters, 1), eur2(s.cost), s.ppl ? eur(s.ppl) : "–"];
+      }))}
+      <div class="sec"><h2>${say("Älle Tankunga", "Alle Tankungen")}</h2></div><div class="list">${rows}</div>`
+      : `<div class="card empty"><div class="bigic">⛽</div><b>${say("No nix eitrage", "Noch keine Einträge")}</b><p>${say("Fotografier dein nächschda Tankbeleg – d'App liest Sorte, Menge ond Preis aus ond sagt dir, ob's dr Bestpreis war.", "Fotografiere deinen nächsten Tankbeleg – die App liest Sorte, Menge und Preis aus und sagt dir, ob es der Bestpreis war.")}</p></div>`}
+      <div class="sec"><h2>Daten</h2></div>
+      <div class="row two"><button class="btn secondary" id="btnTbCsv">Als CSV exportieren</button><button class="btn secondary" id="btnTbBackup">Sicherung speichern</button></div>
+      <div class="row"><button class="btn secondary block" id="btnTbRestore">Sicherung laden</button></div>
+      <p class="small" style="margin-top:10px">Das Tankbuch bleibt nur auf diesem Gerät gespeichert – Belege werden direkt auf dem iPhone ausgelesen (Tesseract.js, Open Source), nichts wird hochgeladen. Ab und zu eine Sicherung speichern, z. B. in iCloud Drive.</p>`;
+  }
+
+  // ---- Erfassen / Bearbeiten
+  let tbEdit = null, tbPhoto = null, tbOrder = [];
+  async function stationOptions(selId, text) {
+    const list = await allStations(), hb = homeBase();
+    const guess = text ? matchStation(text, list) : null;
+    const d = (s) => hb && s.lat != null ? distKm(hb.lat, hb.lng, s.lat, s.lng) : 999;
+    const sorted = [...list].sort((a, b) => d(a) - d(b));
+    const lbl = (s) => `${s.brand} · ${s.place}, ${s.street}`;
+    const sel = selId || guess?.id || "";
+    $("#tbSt").innerHTML = `<option value="">– unbekannt / andere –</option>`
+      + (guess ? `<optgroup label="Erkannt"><option value="${esc(guess.id)}">${esc(lbl(guess))}</option></optgroup>` : "")
+      + `<optgroup label="Nach Entfernung zur Homebase">${sorted.filter((s) => s.id !== guess?.id).map((s) => `<option value="${esc(s.id)}">${esc(lbl(s))}</option>`).join("")}</optgroup>`;
+    if (sel && ![...$("#tbSt").options].some((o) => o.value === sel)) $("#tbSt").insertAdjacentHTML("beforeend", `<option value="${esc(sel)}">${esc(tbEdit?.station?.label || "gespeicherte Tankstelle")}</option>`);
+    $("#tbSt").value = sel;
+    return guess;
+  }
+  function fillForm(e) {
+    $("#tbDate").value = e.date || new Date().toISOString().slice(0, 10);
+    $("#tbTime").value = e.time || "";
+    $("#tbFuel").value = e.fuel || fuel;
+    $("#tbL").value = e.liters != null ? fmtNum(e.liters, 2) : "";
+    $("#tbP").value = e.ppl != null ? fmtNum(e.ppl, 3) : "";
+    $("#tbT").value = e.total != null ? fmtNum(e.total, 2) : "";
+    $("#tbOdo").value = e.odo || "";
+    $("#tbFull").checked = e.full !== false;
+    $("#tbNote").value = e.note || "";
+    $("#tbPremium").checked = !!e.premium;
+    tbOrder = [];
+  }
+  async function openTbForm(entry, file) {
+    tbEdit = entry || null; tbPhoto = entry?.photo || null;
+    fillForm(entry || {});
+    $("#tbTitle").textContent = entry ? "Tankung bearbeiten" : file ? "Beleg prüfen" : "Tankung erfassen";
+    $("#btnTbDel").hidden = !entry;
+    $("#tbImg").hidden = !tbPhoto; if (tbPhoto) $("#tbImg").src = URL.createObjectURL(tbPhoto);
+    $("#tbOcr").textContent = "";
+    $("#dlgTb").showModal();
+    await stationOptions(entry?.station?.id, null).catch(() => {});
+    if (!file) return;
+    tbPhoto = await thumbOf(file).catch(() => null);
+    if (tbPhoto) { $("#tbImg").src = URL.createObjectURL(tbPhoto); $("#tbImg").hidden = false; }
+    $("#tbOcr").innerHTML = `<span class="spin-dot"></span> Beleg wird gelesen … (beim ersten Mal wird der Belegleser geladen, ca. 5 MB)`;
+    try {
+      const text = await readReceipt(file, (p) => { $("#tbOcr").innerHTML = `<span class="spin-dot"></span> Beleg wird gelesen … ${Math.round(p * 100)} %`; });
+      const r = parseReceipt(text);
+      fillForm({ ...r, full: true });
+      const guess = await stationOptions(null, text).catch(() => null);
+      const found = ["fuel", "liters", "ppl", "total", "date", "time"].filter((k) => r[k] != null).length;
+      $("#tbOcr").innerHTML = `${found >= 5 ? "✅" : "⚠️"} ${found} von 6 Angaben erkannt${guess ? ` · Tankstelle: ${esc(guess.brand)} ${esc(guess.place)}` : ""}. <b>Bitte prüfen</b> – Belege sind nicht immer gut lesbar.`;
+      $("#tbOcr").dataset.text = text;
+    } catch (err) {
+      $("#tbOcr").textContent = `⚠️ ${err.message || "Beleg konnte nicht gelesen werden"} – bitte von Hand eintragen.`;
+    }
+  }
+  // Zwei von Menge / Preis / Betrag eingegeben → dritte Größe ausrechnen
+  ["#tbL", "#tbP", "#tbT"].forEach((id) => $(id).addEventListener("input", () => {
+    tbOrder = [...tbOrder.filter((x) => x !== id), id].slice(-2);
+    if (tbOrder.length < 2) return;
+    const L = num2($("#tbL").value), P = num2($("#tbP").value), T = num2($("#tbT").value);
+    const other = ["#tbL", "#tbP", "#tbT"].find((x) => !tbOrder.includes(x));
+    if (other === "#tbT" && L && P) $("#tbT").value = fmtNum(L * P, 2);
+    if (other === "#tbP" && L && T) $("#tbP").value = fmtNum(T / L, 3);
+    if (other === "#tbL" && P && T) $("#tbL").value = fmtNum(T / P, 2);
+  }));
+  async function saveTb() {
+    const L = num2($("#tbL").value), P = num2($("#tbP").value), T = num2($("#tbT").value);
+    if (!$("#tbDate").value || !L || !P) { toast("Bitte mindestens Datum, Menge und Preis je Liter eintragen.", 4000); return; }
+    const sid = $("#tbSt").value, opt = $("#tbSt").selectedOptions[0];
+    const e = {
+      id: tbEdit?.id || `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+      date: $("#tbDate").value, time: $("#tbTime").value || "", fuel: $("#tbFuel").value, premium: $("#tbPremium").checked,
+      liters: L, ppl: P, total: T ?? Math.round(L * P * 100) / 100,
+      station: sid ? { id: sid, label: opt.textContent.split(",")[0] } : null,
+      odo: num2($("#tbOdo").value) || null, full: $("#tbFull").checked, note: $("#tbNote").value.trim(),
+      photo: tbPhoto || null, created: tbEdit?.created || new Date().toISOString(),
+    };
+    const dup = tbEntries.find((x) => x.id !== e.id && x.date === e.date && x.time === e.time && Math.abs((x.total || 0) - e.total) < 0.01);
+    if (dup && !confirm("Diese Tankung scheint schon im Tankbuch zu stehen. Trotzdem speichern?")) return;
+    e.cmp = await compareEntry(e).catch(() => null);
+    try { await tbDB.put(e); } catch (err) { toast("Speichern nicht möglich: " + err.message, 6000); return; }
+    $("#dlgTb").close();
+    await tbLoad();
+    if (tbOpenState) renderTankbuch(); else renderTbEntry();
+    celebrate(e);
+  }
+  // ---- Gratulation bei Bestpreis (oder günstiger als alles im Umkreis der Homebase)
+  function celebrate(e) {
+    const v = verdictOf(e), hb = homeBase();
+    if (!v) { toast(e.cmp?.none ? "Gespeichert ✓ – für diesen Zeitpunkt gibt es keine Vergleichsdaten." : "Gespeichert ✓"); return; }
+    if (!v.best) {
+      toast(say(`Gspeichert ✓ – ${ctl(v.diff)} über em Bestpreis (${e.cmp.cheapest || "Umkreis Homebase"}). Nägschtes Mol!`,
+        `Gespeichert ✓ – ${ctl(v.diff)} über dem Bestpreis (${e.cmp.cheapest || "Umkreis Homebase"}).`), 6000);
+      return;
+    }
+    const L = fmtNum(e.liters, 0);
+    $("#cgTitle").textContent = v.beat ? say("Billiger als älles drhoim!", "Günstiger als alles rund um die Homebase!") : say("Bestpreis – sauber!", "Bestpreis getroffen!");
+    $("#cgText").innerHTML = (v.beat
+      ? say(`Mit ${eur(e.ppl)}/l warsch <b>${fmtNum(-v.diff * 100, 1)} ct</b> billiger als dr günstigschde Preis im Umkreis vo ${esc(hb?.name || "dr Homebase")}.`,
+        `Mit ${eur(e.ppl)}/l warst du <b>${fmtNum(-v.diff * 100, 1)} ct</b> günstiger als der günstigste Preis im Umkreis von ${esc(hb?.name || "der Homebase")}.`)
+      : say(`Um ${esc(e.time || "die Zeit")} hot's im Umkreis vo ${esc(hb?.name || "dr Homebase")} nix Billigers gä als deine ${eur(e.ppl)}/l.`,
+        `Um ${esc(e.time || "diese Zeit")} gab es im Umkreis von ${esc(hb?.name || "der Homebase")} nichts Günstigeres als deine ${eur(e.ppl)}/l.`))
+      + (v.vsAvg > 0.05 ? `<br>${say("Gegenüber em Durchschnitt gspart", "Gegenüber dem Durchschnitt gespart")}: <b>${eur2(v.vsAvg)}</b> bei ${L} l${SW() ? ` – ${brezel(v.vsAvg).replace(/^D/, "d").replace(/[.!]$/, "")}` : ""}.` : "");
+    const cf = $("#cgConfetti");
+    cf.innerHTML = Array.from({ length: 26 }, (_, i) => `<i style="left:${(i * 37) % 100}%;animation-delay:${(i % 9) * 0.12}s;animation-duration:${1.8 + (i % 5) * 0.35}s">${["🎉", "⛽", "🥨", "✨", "🏆"][i % 5]}</i>`).join("");
+    $("#congrats").hidden = false;
+    clearTimeout(celebrate.t); celebrate.t = setTimeout(() => { $("#congrats").hidden = true; }, 8000);
+  }
+  $("#congrats").addEventListener("click", () => { $("#congrats").hidden = true; });
+
+  // ---- Export (CSV, z. B. für Excel/Steuer) und Sicherung (JSON, ohne Fotos)
+  async function shareFile(name, type, content) {
+    const file = new File([content], name, { type });
+    try { if (navigator.canShare?.({ files: [file] })) return await navigator.share({ files: [file], title: name }); } catch (e) { if (e.name === "AbortError") return; }
+    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(file), download: name });
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  }
+  const csvNum = (v, d) => v == null ? "" : v.toFixed(d).replace(".", ",");
+  function exportCsv() {
+    const head = ["Datum", "Uhrzeit", "Tankstelle", "Sorte", "Liter", "Preis je Liter", "Betrag", "Kilometerstand", "Vollgetankt",
+      "Bestpreis Umkreis Homebase", "Ø Umkreis Homebase", "Abstand zum Bestpreis (ct/l)", "Gespart ggü. Ø (€)", "Notiz"];
+    const q = (s) => `"${String(s ?? "").replace(/"/g, '""')}"`;
+    const rows = [...tbEntries].reverse().map((e) => {
+      const v = verdictOf(e);
+      return [dDE(e.date), e.time, q(e.station?.label || ""), FUELS[e.fuel] + (e.premium ? " (Premium)" : ""), csvNum(e.liters, 2), csvNum(e.ppl, 3), csvNum(e.total, 2),
+        e.odo ?? "", e.full === false ? "nein" : "ja", csvNum(e.cmp?.min, 3), csvNum(e.cmp?.avg, 3), v ? csvNum(v.diff * 100, 1) : "", v ? csvNum(v.vsAvg, 2) : "", q(e.note)].join(";");
+    });
+    shareFile(`Tankbuch-${new Date().toISOString().slice(0, 10)}.csv`, "text/csv", "﻿" + [head.join(";"), ...rows].join("\r\n"));
+  }
+  function exportBackup() {
+    const data = tbEntries.map(({ photo, ...e }) => e);
+    shareFile(`Tankbuch-Sicherung-${new Date().toISOString().slice(0, 10)}.json`, "application/json", JSON.stringify({ app: "Schwabensprit", v: 1, entries: data }, null, 1));
+  }
+  $("#tbImport").addEventListener("change", async (ev) => {
+    const f = ev.target.files[0]; ev.target.value = "";
+    if (!f) return;
+    try {
+      const d = JSON.parse(await f.text());
+      const list = (d.entries || []).filter((e) => e.id && e.date && e.liters);
+      for (const e of list) { const old = tbEntries.find((x) => x.id === e.id); await tbDB.put({ ...e, photo: old?.photo || null }); }
+      await tbLoad(); renderTankbuch();
+      toast(`${list.length} Tankungen aus der Sicherung übernommen ✓`);
+    } catch { toast("Das ist keine gültige Tankbuch-Sicherung.", 5000); }
+  });
+  $("#tbFile").addEventListener("change", (ev) => { const f = ev.target.files[0]; ev.target.value = ""; if (f) openTbForm(null, f); });
+  $("#btnTbSave").addEventListener("click", saveTb);
+  $("#btnTbCancel").addEventListener("click", () => $("#dlgTb").close());
+  $("#btnTbDel").addEventListener("click", async () => {
+    if (!tbEdit || !confirm("Diese Tankung löschen?")) return;
+    await tbDB.del(tbEdit.id); $("#dlgTb").close(); await tbLoad(); renderTankbuch(); toast("Gelöscht.");
+  });
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest("#btnTbOpen,#btnTbBack,#btnTbScan,#btnTbManual,#btnTbCsv,#btnTbBackup,#btnTbRestore,[data-tbedit]");
+    if (!el) return;
+    if (el.id === "btnTbOpen") return openTankbuch();
+    if (el.id === "btnTbBack") return closeTankbuch();
+    if (el.id === "btnTbScan") return $("#tbFile").click();
+    if (el.id === "btnTbManual") return openTbForm(null, null);
+    if (el.id === "btnTbCsv") return exportCsv();
+    if (el.id === "btnTbBackup") return exportBackup();
+    if (el.id === "btnTbRestore") return $("#tbImport").click();
+    if (el.dataset.tbedit) return openTbForm(tbEntries.find((x) => x.id === el.dataset.tbedit), null);
+  });
+
   // Ziehen nach unten zum Aktualisieren
   const ptr = $("#ptr"); let py = null, pull = 0, busy = false;
-  window.addEventListener("touchstart", (e) => { py = !detailId && window.scrollY <= 0 && !busy && !document.querySelector("dialog[open]") && !e.target.closest("#map") ? e.touches[0].clientY : null; pull = 0; }, { passive: true });
+  window.addEventListener("touchstart", (e) => { py = !detailId && !tbOpenState && window.scrollY <= 0 && !busy && !document.querySelector("dialog[open]") && !e.target.closest("#map") ? e.touches[0].clientY : null; pull = 0; }, { passive: true });
   window.addEventListener("touchmove", (e) => {
     if (py == null) return;
     pull = Math.max(0, e.touches[0].clientY - py);

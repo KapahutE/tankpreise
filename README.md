@@ -16,6 +16,7 @@ Datenquelle: [Tankerkönig-API](https://creativecommons.tankerkoenig.de/) (amtli
 - **„Lohnt sich am meisten“**: die günstigste Tankfüllung inklusive Hin- und Rückfahrt (Fahrstrecke ≈ 1,3 × Luftlinie; Tankmenge und Verbrauch unter ⚙ einstellbar), dazu die Sortierung „Inkl. Anfahrt“
 - den **12-Uhr-Hinweis** mit Countdown: Erhöhungen gibt es nur zwischen 12 und 13 Uhr (aus den Daten erkannt), danach sinken die Preise bis zum Abend
 - den Preisverlauf der letzten 7 Tage und die Abweichung nach Uhrzeit
+- das **Tankbuch**: Tankbeleg fotografieren, die App liest Sorte, Menge, Preis/Liter, Betrag, Datum und Uhrzeit aus (Tesseract.js, Open Source, läuft komplett auf dem Gerät) und erkennt die Tankstelle. Jede Tankung wird mit dem günstigsten Preis im Umkreis der Homebase zur Tankzeit verglichen (🏆-Gratulation beim Bestpreis). Mit Kilometerstand: Verbrauch und Kosten je 100 km. Speicherung nur auf dem Gerät; Export als CSV, Sicherung/Wiederherstellung als JSON. Grundlage ist `docs/data/<Base>/min-JJJJ-MM.json` (günstigster/mittlerer Preis je Viertelstunde).
 - eine Erinnerung, bevor der GitHub-Zugangsschlüssel abläuft (Ablaufdatum unter ⚙ eintragen)
 - die Wochenreports
 - den Knopf ↻ für einen **sofortigen Abruf**, und in den Einstellungen „Wochenreport jetzt erstellen“

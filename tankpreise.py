@@ -1142,6 +1142,71 @@ def _cents(v):
     return None if v is None else round(v * 1000)
 
 
+def export_minhist(store, docs, bases, st, now):
+    """Günstigster und mittlerer Preis je Base, Sorte und Viertelstunde, monatsweise in
+    docs/data/<Base>/min-JJJJ-MM.json – für den Vergleich im Tankbuch der App.
+    Inkrementell: neu berechnet werden die letzten 2 Tage, ein fehlender Monat komplett."""
+    step = timedelta(minutes=FC_STEP_MIN)
+    month0 = lambda t: t.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    path = lambda b, m: os.path.join(docs, "data", b["id"], f"min-{m:%Y-%m}.json")
+    start = now - timedelta(days=2)
+    for m in {month0(now), month0(start)}:
+        if any(not os.path.exists(path(b, m)) for b in bases):
+            start = min(start, m)
+    start = start.replace(minute=start.minute - start.minute % FC_STEP_MIN, second=0, microsecond=0)
+    t0, n, grid = fc_grid(store, start, now)
+    member = {}
+    for b in bases:
+        for sid, info in st.items():
+            d = base_dist(b, info)
+            if d is not None and d <= b["radius_km"] + 0.05:
+                member.setdefault(sid, []).append(b["id"])
+    files = {}
+    def month_file(b, m):
+        key = (b["id"], m)
+        if key not in files:
+            slots = int(((m.replace(day=28) + timedelta(days=4)).replace(day=1) - m) / step)
+            try:
+                with open(path(b, m), encoding="utf-8") as fh:
+                    obj = json.load(fh)
+            except (FileNotFoundError, ValueError):
+                obj = {"v": 1, "start": m.isoformat(timespec="minutes"), "step": FC_STEP_MIN, "ids": [],
+                       **{f: {"min": [None] * slots, "avg": [None] * slots, "at": [None] * slots} for f in FUELS}}
+            files[key] = obj
+        return files[key]
+    for k in range(n):
+        t = t0 + step * k
+        m = month0(t)
+        i = int((t - m) / step)
+        best, tot = {}, {}
+        for sid, arrs in grid.items():
+            for bid in member.get(sid, ()):
+                for j, a in enumerate(arrs):
+                    v = a[k]
+                    if v < 0:
+                        continue
+                    key = (bid, j)
+                    if key not in best or v < best[key][0]:
+                        best[key] = (v, sid)
+                    tt = tot.setdefault(key, [0, 0]); tt[0] += v; tt[1] += 1
+        if not best:
+            continue
+        for b in bases:
+            obj = month_file(b, m)
+            for j, f in enumerate(FUELS):
+                if (b["id"], j) not in best:
+                    continue
+                v, sid = best[(b["id"], j)]
+                if sid not in obj["ids"]:
+                    obj["ids"].append(sid)
+                s_, c_ = tot[(b["id"], j)]
+                obj[f]["min"][i], obj[f]["avg"][i], obj[f]["at"][i] = v, round(s_ / c_), obj["ids"].index(sid)
+    for (bid, m), obj in files.items():
+        obj["names"] = {sid: station_label(st.get(sid)) for sid in obj["ids"]}
+        with open(path({"id": bid}, m), "w", encoding="utf-8") as fh:
+            json.dump(obj, fh, ensure_ascii=False, separators=(",", ":"))
+
+
 def cmd_export(cfg):
     """Schreibt die Daten für die Web-App: docs/data/bases.json und je Base
     docs/data/<ID>/latest.json, history.json und reports.json."""
@@ -1184,7 +1249,7 @@ def cmd_export(cfg):
                 continue
             info = st[sid]
             latest["stations"].append({
-                "id": sid, **nice_station(info),
+                "id": sid, **nice_station(info), "plz": str(info.get("post_code") or ""),
                 "lat": info.get("lat"), "lng": info.get("lng"),
                 "open": r["is_open"], **{f: r[f] for f in FUELS},
                 "hours": {k: v for k, v in hours[sid].items() if k != "fetched"} if sid in hours else None,
@@ -1238,6 +1303,9 @@ def cmd_export(cfg):
 
     with open(os.path.join(docs, "data", "bases.json"), "w", encoding="utf-8") as fh:
         json.dump(index, fh, ensure_ascii=False, separators=(",", ":"))
+    t_mh = time.time()
+    export_minhist(store, docs, bases, st, now)
+    log.info("Preisverlauf fürs Tankbuch aktualisiert (%.1f s).", time.time() - t_mh)
     # Dateien des alten Ein-Ort-Formats entfernen
     for old in ("latest.json", "summary.json", "history.json", "reports.json"):
         try:
