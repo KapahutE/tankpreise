@@ -167,6 +167,7 @@ button{font:inherit;border:0;cursor:pointer;color:inherit;background:none}
 .tbtag{display:inline-block;font-size:11.5px;font-weight:650;color:var(--muted);margin-top:2px}
 .tbtag.good{color:var(--acc-ink)}.tbtag.bad{color:var(--hi)}
 .three-in{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.tbchart{width:100%;height:auto;display:block;margin-top:8px}.tbchart text{fill:var(--muted);font-size:9px}.tbchart .tbval{fill:var(--fg);font-size:8.5px;font-weight:600}.tbbar{fill:var(--lo)}
 .two-in>div,.three-in>div{min-width:0}.two-in input,.three-in input{min-width:0;max-width:100%}
 select{width:100%;font:inherit;font-size:16px;padding:11px 12px;border-radius:11px;border:1px solid var(--line);background:var(--card);color:var(--fg);-webkit-appearance:none;appearance:none}
 #tbImg{display:block;max-width:100%;max-height:180px;margin:0 auto 6px;border-radius:10px;box-shadow:var(--shadow)}
@@ -431,6 +432,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
       <div><label for="tbT">Betrag €</label><input id="tbT" type="text" inputmode="decimal" placeholder="80,04"></div>
     </div>
     <label for="tbSt">Tankstelle</label>
+    <input id="tbStQ" type="search" placeholder="Suchen: Marke, Ort, Straße oder PLZ" autocomplete="off" style="margin-bottom:6px">
     <select id="tbSt"><option value="">– unbekannt / andere –</option></select>
     <div class="two-in">
       <div><label for="tbOdo">Kilometerstand <span class="small">(optional)</span></label><input id="tbOdo" type="text" inputmode="numeric" placeholder="z. B. 84213"></div>
@@ -1987,7 +1989,10 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     store.set("tk", $("#inTk").value.trim());
     store.set("dialect", $("#inDialect").checked ? "1" : "0");
     store.set("tokenExp", $("#inTokExp").value);
-    if ($("#inHome").value) store.set("homeBase", $("#inHome").value);
+    if ($("#inHome").value && $("#inHome").value !== store.get("homeBase", homeBase()?.id || "")) {
+      store.set("homeBase", $("#inHome").value);
+      tbRecompute(true).then((n) => n && toast(`Tankbuch: ${n} Vergleiche mit der neuen Homebase neu berechnet.`));
+    } else if ($("#inHome").value) store.set("homeBase", $("#inHome").value);
     store.set("tank", $("#inTank").value || "50");
     store.set("cons", $("#inCons").value || "7");
     dataMode = null; bases = [];
@@ -2060,7 +2065,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     const all = lines.join("\n"), low = all.toLowerCase();
     const n = (s) => parseFloat(String(s).replace(/\s/g, "").replace(",", "."));
     const r2 = (v) => Math.round(v * 100) / 100, r3 = (v) => Math.round(v * 1000) / 1000;
-    const out = { fuel: null, premium: false, liters: null, ppl: null, total: null, date: null, time: null };
+    const out = { fuel: null, premium: false, liters: null, ppl: null, total: null, date: null, time: null, shop: null };
 
     // Menge und Preis je Liter, oft in einer Zeile: „42,15 l x 1,899 EUR/l“ oder „42,15 L * 1,899“
     const LIT = /(\d{1,3}[,.]\d{2,3})\s*(?:l|ltr|lt|liter)\b/;
@@ -2094,11 +2099,22 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
       if (any.length) out.total = Math.max(...any);
     }
 
-    // Gegenprobe Menge × Preis = Betrag; fehlende Größe ergänzen
+    // Gegenprobe Menge × Preis = Betrag. Stehen Shop-Artikel mit auf dem Beleg (Brezel, Kaffee …), ist die
+    // Summe größer – dann zählt der Betrag der Kraftstoffzeile, der zu Menge × Preis passt.
     const { liters: L, ppl: P, total: T } = out;
-    if (L && P && T && Math.abs(L * P - T) > Math.max(0.06, T * 0.01) && T / L >= 0.8 && T / L <= 4) out.ppl = r3(T / L);
-    if (L && P && !T) out.total = r2(L * P);
-    if (L && T && !P && T / L >= 0.8 && T / L <= 4) out.ppl = r3(T / L);
+    const fits = (v) => Math.abs(L * P - v) <= Math.max(0.06, v * 0.01);
+    const plausible = (v) => L && v / L >= 0.8 && v / L <= 4;
+    if (L && P && T && !fits(T)) {
+      const fuelAmt = lines.flatMap(money).find(fits);
+      if (fuelAmt != null) { out.shop = r2(T - fuelAmt); out.total = fuelAmt; }
+      else if (plausible(T)) out.ppl = r3(T / L);                     // Preis je Liter falsch gelesen
+    }
+    if (L && !P && T && fuelLine >= 0) {                               // ohne Literpreis: Betrag der Kraftstoffzeile bevorzugen
+      const amt = [...money(lines[fuelLine]), ...money(lines[fuelLine + 1] || "")].find((v) => plausible(v) && v < T - 0.05);
+      if (amt != null) { out.shop = r2(T - amt); out.total = amt; }
+    }
+    if (L && P && !out.total) out.total = r2(L * P);
+    if (L && out.total && !out.ppl && plausible(out.total)) out.ppl = r3(out.total / L);
     if (!L && P && T) out.liters = r2(T / P);
 
     // Kraftstoff: zuerst rund um die Mengenzeile, sonst im ganzen Beleg
@@ -2163,28 +2179,54 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
 
   // ---- Vergleich: günstigster und mittlerer Preis im Umkreis der Homebase zur Tankzeit (min-JJJJ-MM.json)
   const minCache = {};
+  // Vergleichsregion: die Homebase, wenn die Tankstelle dort liegt (oder unbekannt ist), sonst die Base,
+  // in der sie liegt – auswärts getankt wird nicht mit zu Hause verglichen. Außerhalb aller Bases: kein Vergleich.
+  function regionOf(e) {
+    const hb = homeBase(), s = e.station;
+    if (!s || s.lat == null) return hb;
+    const d = (b) => distKm(b.lat, b.lng, s.lat, s.lng), inside = (b) => d(b) <= b.radius_km + 0.05;
+    if (hb && inside(hb)) return hb;
+    return bases.filter(inside).sort((x, y) => d(x) - d(y))[0] || null;
+  }
   async function compareEntry(e) {
-    const hb = homeBase();
-    if (!hb || !e.date || !e.fuel || !e.ppl) return null;
-    const ym = e.date.slice(0, 7), key = `${hb.id}/${ym}`;
-    if (!(key in minCache)) minCache[key] = await fetchData(`data/${hb.id}/min-${ym}.json`).catch(() => null);
-    const mf = minCache[key];
-    if (!mf?.[e.fuel]) return { base: hb.id, none: true };
+    if (!e.date || !e.fuel || !e.ppl) return null;
+    if (e.premium) return { premium: true };          // Premium-Sorten gibt es bei Tankerkönig nicht – kein fairer Vergleich
+    const b = regionOf(e);
+    if (!b) return { outside: true };
+    const ym = e.date.slice(0, 7), key = `${b.id}/${ym}`;
+    if (!(key in minCache)) minCache[key] = await fetchData(`data/${b.id}/min-${ym}.json`).catch(() => null);
+    const mf = minCache[key], arr = mf?.[e.fuel];
+    if (!arr) return { base: b.id, none: true };
     const [y, m, d] = e.date.split("-").map(Number), [hh, mi] = (e.time || "12:00").split(":").map(Number);
     const [sy, sm] = mf.start.slice(0, 7).split("-").map(Number);
     const i0 = Math.floor((Date.UTC(y, m - 1, d, hh, mi) - Date.UTC(sy, sm - 1, 1)) / (mf.step * 60000));
-    const arr = mf[e.fuel];
-    const i = [i0, i0 - 1, i0 + 1, i0 - 2].find((k) => arr.min[k] != null);   // kleine Lücken überbrücken
-    if (i == null) return { base: hb.id, none: true };
-    return { base: hb.id, min: arr.min[i] / 1000, avg: arr.avg[i] / 1000, cheapest: mf.names?.[mf.ids[arr.at[i]]] || "" };
+    // Gezapft wird vor dem Bezahlen: Viertelstunde der Belegzeit und die davor zählen (z. B. 11:58 gezapft, 12:01 bezahlt)
+    let ks = [i0, i0 - 1].filter((k) => arr.min[k] != null);
+    if (!ks.length) ks = [i0 + 1, i0 - 2].filter((k) => arr.min[k] != null);   // kleine Lücken überbrücken
+    if (!ks.length) return { base: b.id, none: true };
+    const k = ks.reduce((x, y) => arr.min[y] < arr.min[x] ? y : x);
+    return { base: b.id, baseName: b.name, home: b.id === homeBase()?.id, min: arr.min[k] / 1000, avg: arr.avg[k] / 1000, cheapest: mf.names?.[mf.ids[arr.at[k]]] || "" };
   }
   // Bewertung eines Eintrags: Bestpreis getroffen, günstiger als alles im Umkreis, oder Abstand
   const verdictOf = (e) => {
     const c = e.cmp;
-    if (!c || c.none || c.min == null) return null;
+    if (!c || c.none || c.premium || c.outside || c.min == null) return null;
     const diff = e.ppl - c.min;
     return { diff, best: diff <= 0.0005, beat: diff < -0.0005, vsAvg: (c.avg - e.ppl) * e.liters };
   };
+  const cmpNote = (e) => e.cmp?.premium ? "Premium" : e.cmp?.outside ? "außerhalb" : e.cmp?.none ? "kein Vergleich" : "";
+  // 6: Vergleiche neu berechnen (Homebase gewechselt, oder inzwischen Daten vorhanden)
+  async function tbRecompute(all) {
+    if (!tbLoaded) await tbLoad();
+    let n = 0;
+    for (const e of tbEntries) {
+      if (!all && e.cmp && !e.cmp.none) continue;
+      const c = await compareEntry(e).catch(() => null);
+      if (JSON.stringify(c) !== JSON.stringify(e.cmp)) { e.cmp = c; await tbDB.put(e).catch(() => {}); n++; }
+    }
+    if (n) { await tbLoad(); tbOpenState ? renderTankbuch() : renderTbEntry(); }
+    return n;
+  }
 
   // ---- Belegleser (Tesseract.js, Dateien liegen im App-Repository unter ocr/)
   const absUrl = (p) => new URL(p, location.href).href;
@@ -2195,7 +2237,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     s.src = "ocr/tesseract.min.js"; s.onload = res; s.onerror = () => { tessLoading = null; rej(new Error("Belegleser konnte nicht geladen werden")); };
     document.head.appendChild(s);
   });
-  // Foto vorbereiten: richtig drehen (EXIF), auf gut lesbare Größe bringen, Graustufen + Kontrast
+  // Foto vorbereiten: richtig drehen (EXIF über <img>), auf Arbeitsgröße bringen
   async function prepImage(file, maxSide) {
     const url = URL.createObjectURL(file);
     try {
@@ -2207,27 +2249,116 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
       return c;
     } finally { URL.revokeObjectURL(url); }
   }
-  function enhance(c) {
-    const ctx = c.getContext("2d"), im = ctx.getImageData(0, 0, c.width, c.height), d = im.data, hist = new Uint32Array(256);
-    for (let i = 0; i < d.length; i += 4) { const g = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000 | 0; d[i] = g; hist[g]++; }
-    const tot = d.length / 4; let lo = 0, hi = 255, acc = 0;
-    while (lo < 255 && (acc += hist[lo]) < tot * 0.02) lo++;
-    acc = 0; while (hi > 0 && (acc += hist[hi]) < tot * 0.02) hi--;
-    const span = Math.max(1, hi - lo);
-    for (let i = 0; i < d.length; i += 4) { const v = Math.max(0, Math.min(255, (d[i] - lo) * 255 / span)); d[i] = d[i + 1] = d[i + 2] = v; }
+  const canvas = (w, h) => Object.assign(document.createElement("canvas"), { width: Math.max(1, Math.round(w)), height: Math.max(1, Math.round(h)) });
+  const scaledTo = (c, k) => { const o = canvas(c.width * k, c.height * k), x = o.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(c, 0, 0, o.width, o.height); return o; };
+  const grayOf = (c) => {
+    const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data, g = new Uint8Array(c.width * c.height);
+    for (let i = 0, j = 0; i < d.length; i += 4, j++) g[j] = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
+    return g;
+  };
+  const otsu = (g) => {
+    const h = new Float64Array(256); for (const v of g) h[v]++;
+    let sum = 0; for (let i = 0; i < 256; i++) sum += i * h[i];
+    let sB = 0, wB = 0, best = 0, t = 128;
+    for (let i = 0; i < 256; i++) {
+      wB += h[i]; if (!wB) continue; const wF = g.length - wB; if (!wF) break;
+      sB += i * h[i]; const d = sB / wB - (sum - sB) / wF, v = wB * wF * d * d;
+      if (v > best) { best = v; t = i; }
+    }
+    return t;
+  };
+  // Drehen um beliebigen Winkel; Ränder in der Farbe fill
+  function rotated(c, deg, fill) {
+    const r = deg * Math.PI / 180, cs = Math.abs(Math.cos(r)), sn = Math.abs(Math.sin(r));
+    const o = canvas(c.width * cs + c.height * sn, c.width * sn + c.height * cs), x = o.getContext("2d");
+    x.fillStyle = fill; x.fillRect(0, 0, o.width, o.height);
+    x.translate(o.width / 2, o.height / 2); x.rotate(r); x.drawImage(c, -c.width / 2, -c.height / 2);
+    return o;
+  }
+  // Beleg im Foto finden: heller Bereich (Papier) vor dunklerem Hintergrund
+  function paperBox(c, pad = 0.04) {
+    const k = Math.min(1, 500 / Math.max(c.width, c.height)), s = scaledTo(c, k), g = grayOf(s), t = otsu(g), W = s.width, H = s.height;
+    const rows = new Uint32Array(H), cols = new Uint32Array(W);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (g[y * W + x] > t) { rows[y]++; cols[x]++; }
+    const span = (a) => { const m = Math.max(...a) * 0.35; let i = 0, j = a.length - 1; while (i < j && a[i] < m) i++; while (j > i && a[j] < m) j--; return [i, j]; };
+    const [y0, y1] = span(rows), [x0, x1] = span(cols);
+    const area = (x1 - x0) * (y1 - y0) / (W * H);
+    if (area < 0.06 || area > 0.9) return null;   // kein klarer Beleg erkennbar → ganzes Bild
+    const mx = (x1 - x0) * pad, my = (y1 - y0) * pad;   // pad < 0: etwas nach innen, ohne Papierkante
+    return { x: Math.max(0, (x0 - mx) / k), y: Math.max(0, (y0 - my) / k), w: Math.min(W, x1 - x0 + 2 * mx) / k, h: Math.min(H, y1 - y0 + 2 * my) / k };
+  }
+  const cropped = (c, b) => { const o = canvas(b.w, b.h); o.getContext("2d").drawImage(c, b.x, b.y, b.w, b.h, 0, 0, o.width, o.height); return o; };
+  // Schräglage schätzen: bei welchem Winkel liegen die dunklen Textpixel am deutlichsten in Zeilen?
+  function skewAngle(c) {
+    const k = Math.min(1, 700 / Math.max(c.width, c.height)), s = scaledTo(c, k), g = grayOf(s), W = s.width, H = s.height;
+    // nur der innere Bereich – Ränder und Ecken (Hintergrund) würden die Messung verfälschen
+    const inner = [], X0 = W * 0.15 | 0, X1 = W * 0.85 | 0, Y0 = H * 0.12 | 0, Y1 = H * 0.88 | 0;
+    for (let y = Y0; y < Y1; y++) for (let x = X0; x < X1; x++) inner.push(g[y * W + x]);
+    const ti = otsu(Uint8Array.from(inner)) * 0.9, px = [];
+    for (let y = Y0; y < Y1; y++) for (let x = X0; x < X1; x += 2) if (g[y * W + x] < ti) px.push(x, y);
+    if (px.length < 400) return 0;
+    let best = 0, bestScore = -1;
+    for (let a = -15; a <= 15; a += 0.5) {
+      const r = a * Math.PI / 180, sn = Math.sin(r), cs = Math.cos(r), hist = new Float64Array(W + H * 2);
+      for (let i = 0; i < px.length; i += 2) hist[Math.round(px[i + 1] * cs - px[i] * sn + W)]++;
+      let sc = 0; for (const v of hist) sc += v * v;
+      if (sc > bestScore) { bestScore = sc; best = a; }
+    }
+    return best;
+  }
+  // Ungleichmäßige Ausleuchtung und blassen Druck ausgleichen: Pixel / lokaler Hintergrund
+  function flatten(c) {
+    const W = c.width, H = c.height, g = grayOf(c), I = new Float64Array((W + 1) * (H + 1));
+    for (let y = 0; y < H; y++) { let row = 0; for (let x = 0; x < W; x++) { row += g[y * W + x]; I[(y + 1) * (W + 1) + x + 1] = I[y * (W + 1) + x + 1] + row; } }
+    const R = Math.max(8, Math.round(Math.max(W, H) / 40)), ctx = c.getContext("2d"), im = ctx.createImageData(W, H), d = im.data;
+    const out = new Float32Array(W * H), hist = new Uint32Array(256);
+    for (let y = 0; y < H; y++) {
+      const ya = Math.max(0, y - R), yb = Math.min(H, y + R + 1);
+      for (let x = 0; x < W; x++) {
+        const xa = Math.max(0, x - R), xb = Math.min(W, x + R + 1);
+        const m = (I[yb * (W + 1) + xb] - I[ya * (W + 1) + xb] - I[yb * (W + 1) + xa] + I[ya * (W + 1) + xa]) / ((yb - ya) * (xb - xa));
+        const v = Math.min(255, g[y * W + x] / Math.max(1, m) * 235);
+        out[y * W + x] = v; hist[v | 0]++;
+      }
+    }
+    let lo = 0, acc = 0; while (lo < 200 && (acc += hist[lo]) < W * H * 0.01) lo++;   // dunkelste 1 % → schwarz
+    for (let i = 0, j = 0; i < out.length; i++, j += 4) { const v = Math.max(0, Math.min(255, (out[i] - lo) * 255 / Math.max(1, 235 - lo))); d[j] = d[j + 1] = d[j + 2] = v; d[j + 3] = 255; }
     ctx.putImageData(im, 0, 0);
     return c;
   }
+  // Komplette Aufbereitung für die Texterkennung
+  async function prepForOcr(file, rot) {
+    let c = await prepImage(file, 2400);
+    if (rot) c = rotated(c, rot, "#000");
+    // erst Schräglage am Beleg messen, dann das ganze Foto gerade drehen und den Beleg eng ausschneiden
+    let box = paperBox(c);
+    const a = skewAngle(box ? cropped(c, box) : c);
+    if (Math.abs(a) >= 0.5) { c = rotated(c, -a, "#000"); box = paperBox(c); }
+    if (box) c = cropped(c, paperBox(c, -0.015) || box);
+    if (c.width < 1100) c = scaledTo(c, 1100 / c.width);          // Schrift groß genug für Tesseract
+    else if (c.width > 2000) c = scaledTo(c, 2000 / c.width);
+    return flatten(c);
+  }
+  const foundOf = (r) => ["fuel", "liters", "ppl", "total", "date", "time"].filter((k) => r[k] != null).length;
+  // Lesen; bei schwachem Ergebnis gedreht erneut versuchen (Beleg quer oder kopfüber fotografiert)
   async function readReceipt(file, onProgress) {
     await loadTess();
+    let step = 0;
     const worker = await Tesseract.createWorker("deu", 1, {
       workerPath: absUrl("ocr/worker.min.js"), corePath: absUrl("ocr/"), langPath: absUrl("ocr/"), gzip: true,
-      logger: (m) => m.status === "recognizing text" && onProgress?.(m.progress),
+      logger: (m) => m.status === "recognizing text" && onProgress?.(m.progress, step),
     });
     try {
       await worker.setParameters({ tessedit_pageseg_mode: "4", preserve_interword_spaces: "1" });
-      const { data } = await worker.recognize(enhance(await prepImage(file, 2200)));
-      return data.text || "";
+      let best = { text: "", found: -1 };
+      for (const rot of [0, 90, 270, 180]) {
+        const { data } = await worker.recognize(await prepForOcr(file, rot));
+        const found = foundOf(parseReceipt(data.text || ""));
+        if (found > best.found) best = { text: data.text || "", found };
+        if (best.found >= 4) break;
+        step++;
+      }
+      return best.text;
     } finally { worker.terminate(); }
   }
   async function thumbOf(file) {
@@ -2286,6 +2417,7 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     $("#tankbuch").classList.add("open"); $("#tankbuch").setAttribute("aria-hidden", "false");
     document.body.classList.add("lock");
     renderTankbuch();
+    tbRecompute(false);
   }
   function closeTankbuch(fromPop) {
     if (!tbOpenState) return;
@@ -2315,14 +2447,31 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     if (km >= 50) { s.cons = l / km * 100; s.per100 = eu / km * 100; s.km = km; }
     return s;
   }
+  let tbYear = null;
+  // Monatskosten als schmale Balken (Jan–Dez), Wert über dem Balken
+  function monthBars(list, year) {
+    const m = Array(12).fill(0);
+    for (const e of list) m[+e.date.slice(5, 7) - 1] += e.total || 0;
+    const max = Math.max(...m, 1), W = 320, H = 120, bw = W / 12;
+    const bars = m.map((v, i) => {
+      const h = v ? Math.max(2, v / max * (H - 34)) : 0, x = i * bw + bw * 0.2, y = H - 18 - h;
+      return `${v ? `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(bw * 0.6).toFixed(1)}" height="${h.toFixed(1)}" rx="2" class="tbbar"><title>${"JFMAMJJASOND"[i]} ${year}: ${eur2(v)}</title></rect>
+        <text x="${(x + bw * 0.3).toFixed(1)}" y="${(y - 3).toFixed(1)}" text-anchor="middle" class="tbval">${Math.round(v)}</text>` : ""}
+        <text x="${(i * bw + bw / 2).toFixed(1)}" y="${H - 4}" text-anchor="middle">${"JFMAMJJASOND"[i]}</text>`;
+    }).join("");
+    return `<div class="card chartcard"><div class="t">Kosten je Monat</div><div class="s">${year} · in €</div><svg viewBox="0 0 ${W} ${H}" class="tbchart" role="img" aria-label="Tankkosten je Monat ${year}">${bars}</svg></div>`;
+  }
   function renderTankbuch() {
-    const year = String(new Date().getFullYear()), list = tbEntries.filter((e) => e.date?.startsWith(year)), st = tbStats(list);
+    const years = [...new Set(tbEntries.map((e) => e.date.slice(0, 4)))].sort().reverse();
+    if (!years.includes(tbYear)) tbYear = years[0] || String(new Date().getFullYear());
+    const year = tbYear, list = tbEntries.filter((e) => e.date?.startsWith(year)), st = tbStats(list), due = backupDue();
     const hb = homeBase();
     const months = {};
     for (const e of tbEntries) { const k = e.date.slice(0, 7); (months[k] ||= []).push(e); }
-    const rows = tbEntries.map((e) => {
+    const rows = list.map((e) => {
       const v = verdictOf(e);
-      const tag = v ? v.best ? `<span class="tbtag good">🏆 ${v.beat ? say("billiger als älles", "günstiger als alle") : "Bestpreis"}</span>` : `<span class="tbtag ${v.diff > 0.02 ? "bad" : ""}">${ctl(v.diff)}</span>` : "";
+      const tag = v ? v.best ? `<span class="tbtag good">🏆 ${v.beat ? say("billiger als älles", "günstiger als alle") : "Bestpreis"}</span>` : `<span class="tbtag ${v.diff > 0.02 ? "bad" : ""}">${ctl(v.diff)}</span>`
+        : cmpNote(e) ? `<span class="tbtag">${cmpNote(e)}</span>` : "";
       return `<button class="tbitem" data-tbedit="${esc(e.id)}"><div class="d">${esc(dDE(e.date).slice(0, 6))}<span>${esc(e.time || "")}</span></div>
         <div class="info"><div class="name"><span>${esc(e.station?.label || "Tankstelle")}</span></div>
         <div class="addr">${FUELS[e.fuel] || ""}${e.premium ? " (Premium)" : ""} · ${fmtL(e.liters)} · ${eur(e.ppl)}/l</div></div>
@@ -2336,17 +2485,21 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
         <button class="btn" id="btnTbScan">📷 ${say("Beleg scanna", "Beleg scannen")}</button>
         <button class="btn secondary" id="btnTbManual">✍️ Ohne Beleg</button>
       </div>
+      ${due ? `<div class="card notice warnbox" style="margin-top:12px"><span class="ic">💾</span><div><b>Zeit für eine Sicherung</b><br>${esc(due)} Das Tankbuch liegt nur auf diesem Gerät.
+        <div class="row" style="margin-top:10px"><button class="btn" id="btnTbBackup2">Jetzt sichern</button></div></div></div>` : ""}
       ${st.n ? `<div class="sec"><h2>${year}</h2><span class="sub">${st.n} ${st.n === 1 ? "Tankung" : "Tankungen"}</span></div>
+      ${years.length > 1 ? `<div class="chips">${years.map((y) => `<button class="chip ${y === year ? "on" : ""}" data-tbyear="${y}">${y}</button>`).join("")}</div>` : ""}
       <div class="stats">
         <div class="card stat"><span class="eyebrow">Kosten</span><span class="v">${eur2(st.cost)}</span><span class="sub">${fmtNum(st.liters, 1)} l · Ø ${st.ppl ? eur(st.ppl) : "–"}/l</span></div>
-        <div class="card stat"><span class="eyebrow">${say("Gspart", "Gespart")}</span><span class="v">${st.cmpN ? eur2(st.saved) : "–"}</span><span class="sub">ggü. Ø im Umkreis der Homebase</span></div>
+        <div class="card stat"><span class="eyebrow">${say("Gspart", "Gespart")}</span><span class="v">${st.cmpN ? eur2(st.saved) : "–"}</span><span class="sub">ggü. Ø im Umkreis</span></div>
         <div class="card stat"><span class="eyebrow">Bestpreis</span><span class="v">${st.cmpN ? `${st.best} von ${st.cmpN}` : "–"}</span><span class="sub">Tankungen zum günstigsten Preis</span></div>
         <div class="card stat"><span class="eyebrow">Verbrauch</span><span class="v">${st.cons ? fmtNum(st.cons, 1) + " l" : "–"}</span><span class="sub">${st.cons ? `je 100 km · ${eur2(st.per100)}/100 km` : "Kilometerstand eintragen"}</span></div>
       </div>
-      ${tbl(["Monat", "Liter", "Kosten", "Ø €/l"], Object.keys(months).sort().reverse().map((k) => {
+      ${monthBars(list, year)}
+      ${tbl(["Monat", "Liter", "Kosten", "Ø €/l"], Object.keys(months).filter((k) => k.startsWith(year)).sort().reverse().map((k) => {
         const s = tbStats(months[k]); return [`${k.slice(5)}/${k.slice(0, 4)}`, fmtNum(s.liters, 1), eur2(s.cost), s.ppl ? eur(s.ppl) : "–"];
       }))}
-      <div class="sec"><h2>${say("Älle Tankunga", "Alle Tankungen")}</h2></div><div class="list">${rows}</div>`
+      <div class="sec"><h2>${say("Älle Tankunga", "Alle Tankungen")}</h2><span class="sub">${year}</span></div><div class="list">${rows}</div>`
       : `<div class="card empty"><div class="bigic">⛽</div><b>${say("No nix eitrage", "Noch keine Einträge")}</b><p>${say("Fotografier dein nächschda Tankbeleg – d'App liest Sorte, Menge ond Preis aus ond sagt dir, ob's dr Bestpreis war.", "Fotografiere deinen nächsten Tankbeleg – die App liest Sorte, Menge und Preis aus und sagt dir, ob es der Bestpreis war.")}</p></div>`}
       <div class="sec"><h2>Daten</h2></div>
       <div class="row two"><button class="btn secondary" id="btnTbCsv">Als CSV exportieren</button><button class="btn secondary" id="btnTbBackup">Sicherung speichern</button></div>
@@ -2356,20 +2509,32 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
 
   // ---- Erfassen / Bearbeiten
   let tbEdit = null, tbPhoto = null, tbOrder = [];
+  let tbStList = [], tbGuess = null, tbSel = "";
+  const stLabel = (s) => `${s.brand} · ${s.place}, ${s.street}`;
   async function stationOptions(selId, text) {
-    const list = await allStations(), hb = homeBase();
-    const guess = text ? matchStation(text, list) : null;
-    const d = (s) => hb && s.lat != null ? distKm(hb.lat, hb.lng, s.lat, s.lng) : 999;
-    const sorted = [...list].sort((a, b) => d(a) - d(b));
-    const lbl = (s) => `${s.brand} · ${s.place}, ${s.street}`;
-    const sel = selId || guess?.id || "";
-    $("#tbSt").innerHTML = `<option value="">– unbekannt / andere –</option>`
-      + (guess ? `<optgroup label="Erkannt"><option value="${esc(guess.id)}">${esc(lbl(guess))}</option></optgroup>` : "")
-      + `<optgroup label="Nach Entfernung zur Homebase">${sorted.filter((s) => s.id !== guess?.id).map((s) => `<option value="${esc(s.id)}">${esc(lbl(s))}</option>`).join("")}</optgroup>`;
-    if (sel && ![...$("#tbSt").options].some((o) => o.value === sel)) $("#tbSt").insertAdjacentHTML("beforeend", `<option value="${esc(sel)}">${esc(tbEdit?.station?.label || "gespeicherte Tankstelle")}</option>`);
-    $("#tbSt").value = sel;
-    return guess;
+    tbStList = await allStations();
+    tbGuess = text ? matchStation(text, tbStList) : null;
+    tbSel = selId || tbGuess?.id || "";
+    $("#tbStQ").value = "";
+    paintStations(tbSel);
+    return tbGuess;
   }
+  // Liste nach Entfernung zur Homebase; mit Suchbegriff gefiltert („aral metz“)
+  function paintStations(cur = $("#tbSt").value || tbSel) {
+    const hb = homeBase(), q = $("#tbStQ").value.toLowerCase().split(/\s+/).filter(Boolean);
+    const d = (s) => hb && s.lat != null ? distKm(hb.lat, hb.lng, s.lat, s.lng) : 999;
+    const hit = (s) => q.every((w) => stLabel(s).toLowerCase().includes(w) || String(s.plz || "").startsWith(w));
+    const list = tbStList.filter((s) => s.id !== tbGuess?.id && hit(s)).sort((a, b) => d(a) - d(b)).slice(0, q.length ? 80 : 400);
+    $("#tbSt").innerHTML = `<option value="">– unbekannt / andere –</option>`
+      + (tbGuess && hit(tbGuess) ? `<optgroup label="Erkannt"><option value="${esc(tbGuess.id)}">${esc(stLabel(tbGuess))}</option></optgroup>` : "")
+      + `<optgroup label="${q.length ? `${list.length} Treffer` : "Nach Entfernung zur Homebase"}">${list.map((s) => `<option value="${esc(s.id)}">${esc(stLabel(s))}</option>`).join("")}</optgroup>`;
+    if (cur && ![...$("#tbSt").options].some((o) => o.value === cur)) {
+      const s = tbStList.find((x) => x.id === cur);
+      $("#tbSt").insertAdjacentHTML("afterbegin", `<option value="${esc(cur)}">${esc(s ? stLabel(s) : tbEdit?.station?.label || "gespeicherte Tankstelle")}</option>`);
+    }
+    $("#tbSt").value = q.length && !cur && list.length ? list[0].id : cur;
+  }
+  $("#tbStQ").addEventListener("input", () => paintStations());
   function fillForm(e) {
     $("#tbDate").value = e.date || new Date().toISOString().slice(0, 10);
     $("#tbTime").value = e.time || "";
@@ -2397,12 +2562,12 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     if (tbPhoto) { $("#tbImg").src = URL.createObjectURL(tbPhoto); $("#tbImg").hidden = false; }
     $("#tbOcr").innerHTML = `<span class="spin-dot"></span> Beleg wird gelesen … (beim ersten Mal wird der Belegleser geladen, ca. 5 MB)`;
     try {
-      const text = await readReceipt(file, (p) => { $("#tbOcr").innerHTML = `<span class="spin-dot"></span> Beleg wird gelesen … ${Math.round(p * 100)} %`; });
+      const text = await readReceipt(file, (p, step) => { $("#tbOcr").innerHTML = `<span class="spin-dot"></span> Beleg wird gelesen${step ? ` (${step + 1}. Versuch, gedreht)` : ""} … ${Math.round(p * 100)} %`; });
       const r = parseReceipt(text);
       fillForm({ ...r, full: true });
       const guess = await stationOptions(null, text).catch(() => null);
       const found = ["fuel", "liters", "ppl", "total", "date", "time"].filter((k) => r[k] != null).length;
-      $("#tbOcr").innerHTML = `${found >= 5 ? "✅" : "⚠️"} ${found} von 6 Angaben erkannt${guess ? ` · Tankstelle: ${esc(guess.brand)} ${esc(guess.place)}` : ""}. <b>Bitte prüfen</b> – Belege sind nicht immer gut lesbar.`;
+      $("#tbOcr").innerHTML = `${found >= 5 ? "✅" : "⚠️"} ${found} von 6 Angaben erkannt${guess ? ` · Tankstelle: ${esc(guess.brand)} ${esc(guess.place)}` : ""}${r.shop ? ` · Shop-Artikel (${eur2(r.shop)}) nicht mitgezählt` : ""}. <b>Bitte prüfen</b> – Belege sind nicht immer gut lesbar.`;
       $("#tbOcr").dataset.text = text;
     } catch (err) {
       $("#tbOcr").textContent = `⚠️ ${err.message || "Beleg konnte nicht gelesen werden"} – bitte von Hand eintragen.`;
@@ -2426,10 +2591,24 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
       id: tbEdit?.id || `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
       date: $("#tbDate").value, time: $("#tbTime").value || "", fuel: $("#tbFuel").value, premium: $("#tbPremium").checked,
       liters: L, ppl: P, total: T ?? Math.round(L * P * 100) / 100,
-      station: sid ? { id: sid, label: opt.textContent.split(",")[0] } : null,
+      station: sid ? (() => { const st = tbStList.find((x) => x.id === sid);
+        return { id: sid, label: st ? `${st.brand} · ${st.place}` : (tbEdit?.station?.id === sid ? tbEdit.station.label : opt.textContent.split(",")[0]),
+          lat: st?.lat ?? tbEdit?.station?.lat ?? null, lng: st?.lng ?? tbEdit?.station?.lng ?? null }; })() : null,
       odo: num2($("#tbOdo").value) || null, full: $("#tbFull").checked, note: $("#tbNote").value.trim(),
       photo: tbPhoto || null, created: tbEdit?.created || new Date().toISOString(),
     };
+    const warn = [], ord = (x) => x.date + (x.time || "");
+    if (e.ppl < 1.2 || e.ppl > 3.2) warn.push(`Preis je Liter ${eur(e.ppl)} ist ungewöhnlich`);
+    if (e.liters > 150) warn.push(`${fmtL(e.liters)} sind sehr viel für eine Tankung`);
+    if (Math.abs(e.liters * e.ppl - e.total) > Math.max(0.1, e.total * 0.02)) warn.push("Menge × Preis passt nicht zum Betrag");
+    if (e.odo) {
+      const prev = tbEntries.filter((x) => x.id !== e.id && x.odo && ord(x) < ord(e)).sort((a, b) => ord(b).localeCompare(ord(a)))[0];
+      const next = tbEntries.filter((x) => x.id !== e.id && x.odo && ord(x) > ord(e)).sort((a, b) => ord(a).localeCompare(ord(b)))[0];
+      if (prev && e.odo <= prev.odo) warn.push(`Kilometerstand ist nicht größer als bei der Tankung am ${dDE(prev.date)} (${prev.odo} km)`);
+      else if (prev && e.odo - prev.odo > 2500) warn.push(`${e.odo - prev.odo} km seit der letzten Tankung – Tippfehler?`);
+      if (next && e.odo >= next.odo) warn.push(`Kilometerstand ist größer als bei der Tankung am ${dDE(next.date)} (${next.odo} km)`);
+    }
+    if (warn.length && !confirm(`Bitte prüfen:\n• ${warn.join("\n• ")}\n\nTrotzdem speichern?`)) return;
     const dup = tbEntries.find((x) => x.id !== e.id && x.date === e.date && x.time === e.time && Math.abs((x.total || 0) - e.total) < 0.01);
     if (dup && !confirm("Diese Tankung scheint schon im Tankbuch zu stehen. Trotzdem speichern?")) return;
     e.cmp = await compareEntry(e).catch(() => null);
@@ -2441,20 +2620,25 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
   }
   // ---- Gratulation bei Bestpreis (oder günstiger als alles im Umkreis der Homebase)
   function celebrate(e) {
-    const v = verdictOf(e), hb = homeBase();
-    if (!v) { toast(e.cmp?.none ? "Gespeichert ✓ – für diesen Zeitpunkt gibt es keine Vergleichsdaten." : "Gespeichert ✓"); return; }
+    const v = verdictOf(e), area = e.cmp?.baseName || homeBase()?.name || "der Homebase";
+    if (!v) {
+      toast(e.cmp?.premium ? "Gespeichert ✓ – Premium-Sorte, daher ohne Preisvergleich."
+        : e.cmp?.outside ? "Gespeichert ✓ – die Tankstelle liegt außerhalb deiner Bases, daher ohne Preisvergleich."
+        : e.cmp?.none ? "Gespeichert ✓ – für diesen Zeitpunkt gibt es keine Vergleichsdaten." : "Gespeichert ✓", 5000);
+      return;
+    }
     if (!v.best) {
-      toast(say(`Gspeichert ✓ – ${ctl(v.diff)} über em Bestpreis (${e.cmp.cheapest || "Umkreis Homebase"}). Nägschtes Mol!`,
-        `Gespeichert ✓ – ${ctl(v.diff)} über dem Bestpreis (${e.cmp.cheapest || "Umkreis Homebase"}).`), 6000);
+      toast(say(`Gspeichert ✓ – ${ctl(v.diff)} über em Bestpreis im Umkreis vo ${area} (${e.cmp.cheapest}). Nägschtes Mol!`,
+        `Gespeichert ✓ – ${ctl(v.diff)} über dem Bestpreis im Umkreis von ${area} (${e.cmp.cheapest}).`), 6000);
       return;
     }
     const L = fmtNum(e.liters, 0);
-    $("#cgTitle").textContent = v.beat ? say("Billiger als älles drhoim!", "Günstiger als alles rund um die Homebase!") : say("Bestpreis – sauber!", "Bestpreis getroffen!");
+    $("#cgTitle").textContent = v.beat ? (e.cmp.home ? say("Billiger als älles drhoim!", "Günstiger als alles rund um die Homebase!") : say(`Billiger als älles rund um ${area}!`, `Günstiger als alles rund um ${area}!`)) : say("Bestpreis – sauber!", "Bestpreis getroffen!");
     $("#cgText").innerHTML = (v.beat
-      ? say(`Mit ${eur(e.ppl)}/l warsch <b>${fmtNum(-v.diff * 100, 1)} ct</b> billiger als dr günstigschde Preis im Umkreis vo ${esc(hb?.name || "dr Homebase")}.`,
-        `Mit ${eur(e.ppl)}/l warst du <b>${fmtNum(-v.diff * 100, 1)} ct</b> günstiger als der günstigste Preis im Umkreis von ${esc(hb?.name || "der Homebase")}.`)
-      : say(`Um ${esc(e.time || "die Zeit")} hot's im Umkreis vo ${esc(hb?.name || "dr Homebase")} nix Billigers gä als deine ${eur(e.ppl)}/l.`,
-        `Um ${esc(e.time || "diese Zeit")} gab es im Umkreis von ${esc(hb?.name || "der Homebase")} nichts Günstigeres als deine ${eur(e.ppl)}/l.`))
+      ? say(`Mit ${eur(e.ppl)}/l warsch <b>${fmtNum(-v.diff * 100, 1)} ct</b> billiger als dr günstigschde Preis im Umkreis vo ${esc(area)}.`,
+        `Mit ${eur(e.ppl)}/l warst du <b>${fmtNum(-v.diff * 100, 1)} ct</b> günstiger als der günstigste Preis im Umkreis von ${esc(area)}.`)
+      : say(`Um ${esc(e.time || "die Zeit")} hot's im Umkreis vo ${esc(area)} nix Billigers gä als deine ${eur(e.ppl)}/l.`,
+        `Um ${esc(e.time || "diese Zeit")} gab es im Umkreis von ${esc(area)} nichts Günstigeres als deine ${eur(e.ppl)}/l.`))
       + (v.vsAvg > 0.05 ? `<br>${say("Gegenüber em Durchschnitt gspart", "Gegenüber dem Durchschnitt gespart")}: <b>${eur2(v.vsAvg)}</b> bei ${L} l${SW() ? ` – ${brezel(v.vsAvg).replace(/^D/, "d").replace(/[.!]$/, "")}` : ""}.` : "");
     const cf = $("#cgConfetti");
     cf.innerHTML = Array.from({ length: 26 }, (_, i) => `<i style="left:${(i * 37) % 100}%;animation-delay:${(i % 9) * 0.12}s;animation-duration:${1.8 + (i % 5) * 0.35}s">${["🎉", "⛽", "🥨", "✨", "🏆"][i % 5]}</i>`).join("");
@@ -2466,9 +2650,19 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
   // ---- Export (CSV, z. B. für Excel/Steuer) und Sicherung (JSON, ohne Fotos)
   async function shareFile(name, type, content) {
     const file = new File([content], name, { type });
-    try { if (navigator.canShare?.({ files: [file] })) return await navigator.share({ files: [file], title: name }); } catch (e) { if (e.name === "AbortError") return; }
+    try { if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: name }); return true; } } catch (e) { if (e.name === "AbortError") return false; }
     const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(file), download: name });
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+    return true;
+  }
+  // Sicherung fällig? Ab 3 Einträgen: noch nie gesichert, älter als 30 Tage oder 10 neue Einträge seitdem
+  function backupDue() {
+    if (tbEntries.length < 3) return null;
+    const at = store.get("tbBackupAt", ""), since = at ? tbEntries.filter((e) => (e.created || "") > at).length : tbEntries.length;
+    if (!at) return "Du hast dein Tankbuch noch nie gesichert.";
+    const days = Math.floor((Date.now() - new Date(at)) / 864e5);
+    if (days > 30 || since >= 10) return `Letzte Sicherung vor ${days} Tagen${since ? `, seitdem ${since} neue ${since === 1 ? "Tankung" : "Tankungen"}` : ""}.`;
+    return null;
   }
   const csvNum = (v, d) => v == null ? "" : v.toFixed(d).replace(".", ",");
   function exportCsv() {
@@ -2482,9 +2676,10 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     });
     shareFile(`Tankbuch-${new Date().toISOString().slice(0, 10)}.csv`, "text/csv", "﻿" + [head.join(";"), ...rows].join("\r\n"));
   }
-  function exportBackup() {
+  async function exportBackup() {
     const data = tbEntries.map(({ photo, ...e }) => e);
-    shareFile(`Tankbuch-Sicherung-${new Date().toISOString().slice(0, 10)}.json`, "application/json", JSON.stringify({ app: "Schwabensprit", v: 1, entries: data }, null, 1));
+    const ok = await shareFile(`Tankbuch-Sicherung-${new Date().toISOString().slice(0, 10)}.json`, "application/json", JSON.stringify({ app: "Schwabensprit", v: 1, entries: data }, null, 1));
+    if (ok) { store.set("tbBackupAt", new Date().toISOString()); if (tbOpenState) renderTankbuch(); }
   }
   $("#tbImport").addEventListener("change", async (ev) => {
     const f = ev.target.files[0]; ev.target.value = "";
@@ -2505,8 +2700,10 @@ label.check input{width:20px;height:20px;padding:0;flex:none;accent-color:var(--
     await tbDB.del(tbEdit.id); $("#dlgTb").close(); await tbLoad(); renderTankbuch(); toast("Gelöscht.");
   });
   document.addEventListener("click", (e) => {
-    const el = e.target.closest("#btnTbOpen,#btnTbBack,#btnTbScan,#btnTbManual,#btnTbCsv,#btnTbBackup,#btnTbRestore,[data-tbedit]");
+    const el = e.target.closest("#btnTbOpen,#btnTbBack,#btnTbScan,#btnTbManual,#btnTbCsv,#btnTbBackup,#btnTbBackup2,#btnTbRestore,[data-tbedit],[data-tbyear]");
     if (!el) return;
+    if (el.dataset.tbyear) { tbYear = el.dataset.tbyear; return renderTankbuch(); }
+    if (el.id === "btnTbBackup2") return exportBackup();
     if (el.id === "btnTbOpen") return openTankbuch();
     if (el.id === "btnTbBack") return closeTankbuch();
     if (el.id === "btnTbScan") return $("#tbFile").click();
