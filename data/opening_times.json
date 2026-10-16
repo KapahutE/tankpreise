@@ -1067,10 +1067,8 @@
   "wholeDay": true
  },
  "23d8a952-c42c-4597-a8db-264cdbed4c3d": {
-  "fetched": "2026-10-08T04:34",
-  "overrides": [
-   "07.10.2026, 05:30:00 - 08.10.2026, 10:00:00: geschlossen"
-  ],
+  "fetched": "2026-10-16T17:05",
+  "overrides": [],
   "slots": [
    {
     "days": [
@@ -3735,7 +3733,7 @@
   "wholeDay": false
  },
  "5940c7df-ae10-4eb6-aa34-e24fb4397669": {
-  "fetched": "2026-10-08T04:56",
+  "fetched": "2026-10-16T17:05",
   "overrides": [],
   "slots": [
    {
