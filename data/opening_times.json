@@ -5118,7 +5118,7 @@
   "wholeDay": true
  },
  "8f107dcd-3eb9-45dc-9191-85a8ac9d9d5c": {
-  "fetched": "2026-10-20T21:33",
+  "fetched": "2026-10-28T00:00",
   "overrides": [],
   "slots": [
    {
@@ -5620,7 +5620,7 @@
   "wholeDay": false
  },
  "99000348-efdb-48ed-8294-330c4a779ce3": {
-  "fetched": "2026-10-20T21:33",
+  "fetched": "2026-10-28T00:00",
   "overrides": [],
   "slots": [],
   "wholeDay": true
