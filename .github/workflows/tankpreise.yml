@@ -2,9 +2,9 @@ name: Tankpreise
 
 on:
   schedule:
-    # Alle 5 Minuten starten, abgerufen wird aber höchstens alle ~15 Minuten (Sperre im Programm).
-    # GitHub lässt geplante Läufe bei hoher Last gern aus – so fängt der nächste Termin das auf.
-    - cron: "1-59/5 * * * *"
+    # Versuch ab 08.11.2026: viermal pro Stunde zu unrunden Minuten statt alle 5 Minuten. GitHub startete zuletzt nur noch
+    # etwa 4 von 288 geplanten Läufen am Tag (vorher 28); die dichte Taktung wird offenbar gedrosselt. Auswertung nach 24 Stunden.
+    - cron: "7,22,37,52 * * * *"
     - cron: "37 4 * * 1"             # montags früh (06:37 Sommer- / 05:37 Winterzeit): Wochenreport
   workflow_dispatch:         # manueller Start, z. B. über den Knopf in der iPhone-App
     inputs:
@@ -47,8 +47,8 @@ jobs:
         if: github.event.schedule != '37 4 * * 1' && inputs.aktion != 'report'
         env:
           TANKERKOENIG_API_KEY: ${{ secrets.TANKERKOENIG_API_KEY }}
-        # geplante Läufe: frühestens 13 Minuten nach dem letzten Abruf; Knopf in der App: nach 5 Minuten
-        run: python tankpreise.py fetch --min-interval ${{ github.event_name == 'schedule' && 13 || 5 }}
+        # geplante Läufe: frühestens 10 Minuten nach dem letzten Abruf (Verspätungen von GitHub sollen keinen Lauf verschlucken); Knopf in der App: nach 5 Minuten
+        run: python tankpreise.py fetch --min-interval ${{ github.event_name == 'schedule' && 10 || 5 }}
 
       - name: Auswerten (und ausgefallenen Wochenreport nachholen)
         if: steps.fetch.outputs.fetched == 'true'
