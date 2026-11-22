@@ -316,27 +316,10 @@
   "wholeDay": true
  },
  "04123103-27a7-4f4c-9183-4184ab634a21": {
-  "fetched": "2026-11-15T09:03",
-  "overrides": [
-   "02.11.2026, 09:11:00 - 16.11.2026, 00:00:00: geschlossen"
-  ],
-  "slots": [
-   {
-    "days": [
-     0,
-     1,
-     2,
-     3,
-     4,
-     5,
-     6
-    ],
-    "end": "00:00",
-    "start": "00:00",
-    "text": "täglich"
-   }
-  ],
-  "wholeDay": false
+  "fetched": "2026-11-22T09:33",
+  "overrides": [],
+  "slots": [],
+  "wholeDay": true
  },
  "053c6c07-11bb-4eb3-8f3c-c6b187afe780": {
   "fetched": "2026-11-22T00:33",
@@ -3971,7 +3954,7 @@
   "wholeDay": false
  },
  "619a34c3-c2f4-4dbd-9157-5966afb9aed8": {
-  "fetched": "2026-11-15T09:03",
+  "fetched": "2026-11-22T09:33",
   "overrides": [],
   "slots": [],
   "wholeDay": true
