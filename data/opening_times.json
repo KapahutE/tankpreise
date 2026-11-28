@@ -3100,9 +3100,17 @@
   "wholeDay": false
  },
  "51d4b5fa-a095-1aa0-e100-80009459e03a": {
-  "fetched": "2026-11-21T01:48",
+  "fetched": "2026-11-28T02:03",
   "overrides": [],
   "slots": [
+   {
+    "days": [
+     5
+    ],
+    "end": "19:30",
+    "start": "06:30",
+    "text": "Samstag"
+   },
    {
     "days": [
      0,
@@ -3114,14 +3122,6 @@
     "end": "21:30",
     "start": "06:30",
     "text": "Mo-Fr"
-   },
-   {
-    "days": [
-     5
-    ],
-    "end": "19:30",
-    "start": "06:30",
-    "text": "Samstag"
    }
   ],
   "wholeDay": false
@@ -3203,7 +3203,7 @@
   "wholeDay": false
  },
  "51d4b65f-a095-1aa0-e100-80009459e03a": {
-  "fetched": "2026-11-21T01:48",
+  "fetched": "2026-11-28T02:03",
   "overrides": [],
   "slots": [
    {
