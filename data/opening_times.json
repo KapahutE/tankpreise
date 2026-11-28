@@ -2920,9 +2920,17 @@
   "wholeDay": false
  },
  "51d4b537-a095-1aa0-e100-80009459e03a": {
-  "fetched": "2026-11-21T10:48",
+  "fetched": "2026-11-28T11:03",
   "overrides": [],
   "slots": [
+   {
+    "days": [
+     6
+    ],
+    "end": "22:00",
+    "start": "08:00",
+    "text": "Sonntag, Feiertag"
+   },
    {
     "days": [
      0,
@@ -2934,14 +2942,6 @@
     "end": "22:00",
     "start": "05:00",
     "text": "Mo-Fr"
-   },
-   {
-    "days": [
-     6
-    ],
-    "end": "22:00",
-    "start": "08:00",
-    "text": "Sonntag, Feiertag"
    },
    {
     "days": [
@@ -6689,7 +6689,7 @@
   "wholeDay": true
  },
  "b0f9ffe5-acb1-4435-9ec8-a59ae8625af6": {
-  "fetched": "2026-11-21T10:48",
+  "fetched": "2026-11-28T11:03",
   "overrides": [],
   "slots": [
    {
